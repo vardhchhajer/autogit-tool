@@ -149,6 +149,7 @@ program
 program
   .command('login')
   .description('Authenticate with GitHub')
+  .option('--check', 'Show which token source is active and verify it')
   .action(async () => {
     try { await cmdLogin(); } catch (e: any) { handleError(e); }
   });

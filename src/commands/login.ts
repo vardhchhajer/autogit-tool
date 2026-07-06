@@ -7,6 +7,12 @@ import { logger, spinner } from '../utils/logger.js';
 export async function cmdLogin(): Promise<void> {
   logger.header('GitHub Authentication');
 
+  // --check: diagnose where the current token comes from
+  if (process.argv.includes('--check')) {
+    await checkTokenSources();
+    return;
+  }
+
   const ghUser = checkGhCli();
 
   // If gh CLI is already authenticated, just grab the token silently — no prompt needed
@@ -97,6 +103,64 @@ export async function cmdLogin(): Promise<void> {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function checkTokenSources(): Promise<void> {
+  logger.header('Token source diagnosis');
+  logger.blank();
+
+  const sources: Array<{ label: string; token: string | undefined; source: string }> = [
+    { label: 'GITHUB_TOKEN env var', token: process.env.GITHUB_TOKEN,  source: 'env' },
+    { label: 'GH_TOKEN env var',     token: process.env.GH_TOKEN,       source: 'env' },
+    { label: '~/.autogit/config.json', token: loadConfig().github?.token, source: 'file' },
+  ];
+
+  let activeToken: string | undefined;
+  let activeLabel = '';
+
+  for (const s of sources) {
+    if (s.token) {
+      const preview = s.token.length > 8
+        ? `${s.token.slice(0, 4)}***${s.token.slice(-4)}`
+        : '(too short)';
+      const isActive = !activeToken;
+      const marker = isActive ? chalk.cyan(' ← ACTIVE (this is what AutoGit uses)') : '';
+      console.log(`  ${chalk.green('✔')} ${s.label.padEnd(26)} ${chalk.dim(`[${s.token.length} chars]`)} ${preview}${marker}`);
+      if (isActive) { activeToken = s.token; activeLabel = s.label; }
+    } else {
+      console.log(`  ${chalk.gray('○')} ${s.label.padEnd(26)} ${chalk.gray('(not set)')}`);
+    }
+  }
+
+  logger.blank();
+
+  if (!activeToken) {
+    logger.warn('No GitHub token found anywhere. Run "autogit login" to set one.');
+    return;
+  }
+
+  logger.info(`Active token source: ${chalk.bold(activeLabel)}`);
+  logger.blank();
+
+  // Verify the active token
+  await verifyToken(activeToken);
+
+  // If the active token is an env var and it's bad, tell the user exactly how to fix it
+  if (activeLabel.includes('env')) {
+    logger.blank();
+    logger.warn(`The bad token is coming from the ${chalk.bold(activeLabel)} environment variable.`);
+    logger.dimmed('Even if you run "autogit login", the env var will override it.');
+    logger.blank();
+    logger.info('To fix — unset the bad env var in your current terminal:');
+    logger.blank();
+    console.log(chalk.bold('  PowerShell:'));
+    console.log(chalk.cyan('    Remove-Item Env:GITHUB_TOKEN'));
+    logger.blank();
+    console.log(chalk.bold('  CMD:'));
+    console.log(chalk.cyan('    set GITHUB_TOKEN='));
+    logger.blank();
+    logger.dimmed('Then run "autogit login" to save a fresh token.');
+  }
+}
 
 async function verifyToken(token: string): Promise<void> {
   const spin = spinner('Verifying with GitHub...').start();
