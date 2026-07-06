@@ -2,6 +2,7 @@ import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
 import { getProvider, type AIMessage } from '../ai/provider.js';
 import { linkedinPostPrompt, twitterPostPrompt } from '../ai/prompts.js';
 import { logger, spinner } from '../utils/logger.js';
+import open from 'open';
 
 export interface SocialContent {
   linkedin: {
@@ -28,7 +29,6 @@ export async function generateSocialContent(
   try {
     const provider = getProvider();
 
-    // Generate LinkedIn posts (3 versions)
     const [shortPost, mediumPost, longPost, tweet] = await Promise.all([
       generateSingle(provider, linkedinPostPrompt(analysis, 'short')),
       generateSingle(provider, linkedinPostPrompt(analysis, 'medium')),
@@ -36,7 +36,6 @@ export async function generateSocialContent(
       generateSingle(provider, twitterPostPrompt(analysis)),
     ]);
 
-    // Generate additional content
     const devto = await generateSingle(provider, devtoPrompt(analysis));
     const resumeBullet = await generateSingle(provider, resumePrompt(analysis));
     const portfolioDesc = await generateSingle(provider, portfolioPrompt(analysis));
@@ -44,11 +43,7 @@ export async function generateSocialContent(
     spin.succeed('Social media content generated');
 
     return {
-      linkedin: {
-        short: shortPost,
-        medium: mediumPost,
-        long: longPost,
-      },
+      linkedin: { short: shortPost, medium: mediumPost, long: longPost },
       twitter: tweet,
       devto,
       resumeBullet,
@@ -59,6 +54,27 @@ export async function generateSocialContent(
     logger.warn(`Falling back to templates: ${error.message}`);
     return generateTemplateSocialContent(analysis);
   }
+}
+
+/**
+ * Open LinkedIn share dialog in the browser.
+ * LinkedIn's share intent pre-fills the URL; the user writes/pastes the text and clicks Post.
+ */
+export async function openLinkedInShare(repoUrl: string): Promise<void> {
+  const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(repoUrl)}`;
+  await open(url);
+  logger.success('LinkedIn share dialog opened in browser — paste your post text and click Post');
+}
+
+/**
+ * Open X (Twitter) compose window with the tweet pre-filled.
+ */
+export async function openTwitterShare(tweet: string, repoUrl: string): Promise<void> {
+  // Replace [GITHUB_LINK] placeholder with the real URL
+  const text = tweet.replace('[GITHUB_LINK]', repoUrl).replace(/\[GITHUB_LINK\]/g, repoUrl);
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+  await open(url);
+  logger.success('X (Twitter) compose window opened in browser — review and click Post');
 }
 
 async function generateSingle(provider: any, prompt: string): Promise<string> {

@@ -11,7 +11,7 @@ import {
   updateLatexResume,
   exportResumePDF,
 } from '../services/resume-manager.js';
-import { logger } from '../utils/logger.js';
+import { logger, spinner } from '../utils/logger.js';
 
 export interface ResumeCommandOpts {
   ai?: boolean;
@@ -222,28 +222,17 @@ function showResumeConfig(): void {
 // ─── PDF export ───────────────────────────────────────────────────────────────
 
 async function handlePDFExport(texPath: string, docsDir: string): Promise<void> {
-  // Copy the .tex file to Documents/resume regardless of pdflatex availability
-  const { mkdirSync, copyFileSync } = await import('fs');
-  if (!existsSync(docsDir)) mkdirSync(docsDir, { recursive: true });
-
-  const texFilename = texPath.split(/[/\\]/).pop()!;
-  const destTex = join(docsDir, texFilename);
-  try {
-    copyFileSync(texPath, destTex);
-    logger.success(`Resume .tex copied to: ${chalk.cyan(docsDir)}`);
-  } catch (e: any) {
-    logger.error(`Could not copy file: ${e.message}`);
-    return;
-  }
-
-  // Try PDF compilation
+  const spin = spinner('Exporting resume...').start();
   const result = await exportResumePDF(texPath);
+
   if (result.exported && result.pdfPath) {
-    logger.success(`PDF exported to: ${chalk.cyan(result.pdfPath)}`);
+    spin.succeed(`PDF exported to: ${chalk.cyan(result.pdfPath)}`);
+  } else if (result.texCopied) {
+    spin.warn(`Resume .tex copied to ${chalk.cyan(docsDir)}`);
+    logger.dimmed('PDF compilation unavailable — install TeX Live, MiKTeX, or pdflatex to compile.');
+    logger.dimmed(`To compile manually: pdflatex "${texPath}"`);
   } else {
-    logger.dimmed('pdflatex not found — only the .tex file was copied.');
-    logger.dimmed('To compile to PDF: install TeX Live or MiKTeX, then run:');
-    logger.dimmed(`  pdflatex "${texPath}"`);
+    spin.fail('Export failed');
   }
 }
 

@@ -7,7 +7,7 @@ import { generateReadme, writeReadme, displayDiff, type ReadmeResult } from '../
 import { generateDocs, writeDocs, type DocFile } from '../services/docs-generator.js';
 import { getGitStatus, initGit, generateGitignore, stageAll, generateCommitMessage, commit, push, addRemote } from '../services/git-service.js';
 import { createRepo, getAuthenticatedUser, repoExists, generateTopics, isGitHubConfigured } from '../services/github-service.js';
-import { generateSocialContent } from '../services/social-generator.js';
+import { generateSocialContent, openLinkedInShare, openTwitterShare } from '../services/social-generator.js';
 import { runResumeUpdate } from '../commands/resume.js';
 import { loadConfig } from '../config/manager.js';
 import { logger, spinner } from '../utils/logger.js';
@@ -53,6 +53,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   logger.blank();
 
   const useAI = !options.noAI;
+  let resolvedRepoUrl: string | undefined;
 
   // Step 3: README
   let readmeResult: ReadmeResult | null = null;
@@ -75,12 +76,12 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
 
   // Step 6: GitHub
   if (!options.skipGithub) {
-    await handleGitHub(rootDir, analysis, options);
+    resolvedRepoUrl = await handleGitHub(rootDir, analysis, options);
   }
 
   // Step 7: Social content
   if (!options.skipLinkedin) {
-    await handleSocialContent(analysis, useAI, options);
+    await handleSocialContent(analysis, useAI, options, resolvedRepoUrl);
   }
 
   logger.blank();
@@ -249,13 +250,13 @@ async function handleGitHub(
   rootDir: string,
   analysis: ProjectAnalysis,
   options: PipelineOptions
-): Promise<void> {
+): Promise<string | undefined> {
   if (!isGitHubConfigured()) {
     logger.warn('GitHub not configured. Run "autogit login" or set GITHUB_TOKEN');
-    return;
+    return undefined;
   }
 
-  const status = await getGitStatus(rootDir);
+  await getGitStatus(rootDir);
 
   try {
     const user = await getAuthenticatedUser();
@@ -263,9 +264,9 @@ async function handleGitHub(
 
     const repoName = analysis.name;
     const exists = await repoExists(user.login, repoName);
+    let repoHtmlUrl = `https://github.com/${user.login}/${repoName}`;
 
     if (!exists) {
-      // Create new repository
       const isPrivate = options.private ?? !(options.public ?? false);
 
       if (!options.yes) {
@@ -280,7 +281,7 @@ async function handleGitHub(
 
         if (!confirm) {
           logger.dimmed('GitHub repository creation skipped');
-          return;
+          return undefined;
         }
       }
 
@@ -294,12 +295,13 @@ async function handleGitHub(
         });
 
         await addRemote(rootDir, repo.cloneUrl);
+        repoHtmlUrl = repo.htmlUrl;
         logger.success(`Created repository: ${chalk.underline(repo.htmlUrl)}`);
       } else {
         logger.dimmed(`[dry-run] Would create repository: ${user.login}/${repoName}`);
       }
     } else {
-      logger.info(`Repository exists: ${user.login}/${repoName}`);
+      logger.info(`Repository exists: ${chalk.underline(repoHtmlUrl)}`);
     }
 
     // Push
@@ -312,27 +314,57 @@ async function handleGitHub(
         pushSpin.fail(`Push failed: ${error.message}`);
       }
     }
+
+    return repoHtmlUrl;
   } catch (error: any) {
     logger.error(`GitHub error: ${error.message}`);
+    return undefined;
   }
 }
 
 async function handleSocialContent(
   analysis: ProjectAnalysis,
   useAI: boolean,
-  options: PipelineOptions
+  options: PipelineOptions,
+  repoUrl?: string
 ): Promise<void> {
   const content = await generateSocialContent(analysis, useAI);
 
+  // Replace placeholder with real repo URL if we have it
+  const url = repoUrl || `https://github.com/${analysis.name}`;
+  const linkedinText = content.linkedin.medium.replace(/\[GITHUB_LINK\]/g, url);
+  const tweetText = content.twitter.replace(/\[GITHUB_LINK\]/g, url);
+
   logger.blank();
   logger.header('LinkedIn Post (Medium)');
-  console.log(content.linkedin.medium);
-
+  console.log(linkedinText);
   logger.blank();
   logger.header('X (Twitter) Post');
-  console.log(content.twitter);
-
+  console.log(tweetText);
   logger.blank();
+
+  if (!options.yes && !options.dryRun) {
+    const { openLinkedIn } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'openLinkedIn',
+      message: 'Open LinkedIn share dialog in browser?',
+      default: true,
+    }]);
+    if (openLinkedIn) {
+      await openLinkedInShare(url);
+    }
+
+    const { openTwitter } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'openTwitter',
+      message: 'Open X (Twitter) compose window in browser?',
+      default: true,
+    }]);
+    if (openTwitter) {
+      await openTwitterShare(tweetText, url);
+    }
+  }
+
   logger.dimmed('Tip: Use "autogit linkedin" to see all versions (short/medium/long)');
 }
 

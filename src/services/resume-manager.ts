@@ -1,9 +1,12 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { createRequire } from 'module';
 import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
 import { getProvider, type AIMessage } from '../ai/provider.js';
 import { logger, spinner } from '../utils/logger.js';
+
+const require = createRequire(import.meta.url);
 
 export interface ResumeConfig {
   path: string;
@@ -106,51 +109,98 @@ export function updateLatexResume(
 }
 
 /**
- * Export resume PDF (if pdflatex is available) to ~/Documents/resume/
+ * Export resume to ~/Documents/resume/.
+ * Tries node-latex first (npm package, no system install needed).
+ * Falls back to copying the .tex file if PDF compilation fails.
  */
-export async function exportResumePDF(texPath: string): Promise<{ exported: boolean; pdfPath?: string }> {
+export async function exportResumePDF(texPath: string): Promise<{ exported: boolean; pdfPath?: string; texCopied?: boolean }> {
   const docsDir = join(homedir(), 'Documents', 'resume');
   if (!existsSync(docsDir)) {
     mkdirSync(docsDir, { recursive: true });
   }
 
-  // Check if pdflatex is available
+  const texFilename = texPath.split(/[/\\]/).pop()!;
+  const pdfFilename = texFilename.replace(/\.tex$/i, '.pdf');
+  const destTex = join(docsDir, texFilename);
+  const destPDF = join(docsDir, pdfFilename);
+
+  // Always copy the .tex file
+  try {
+    const { copyFileSync } = await import('fs');
+    copyFileSync(texPath, destTex);
+  } catch {
+    // non-fatal
+  }
+
+  // Try PDF via node-latex (pure npm, no system LaTeX required)
+  try {
+    const nodeLaTeX = await importNodeLatex();
+    if (nodeLaTeX) {
+      const texSource = readFileSync(texPath, 'utf-8');
+      const pdf = await compileWithNodeLatex(nodeLaTeX, texSource, texPath);
+      writeFileSync(destPDF, pdf);
+      return { exported: true, pdfPath: destPDF, texCopied: true };
+    }
+  } catch {
+    // node-latex failed, try system pdflatex
+  }
+
+  // Fallback: system pdflatex
   try {
     const { execSync } = await import('child_process');
     execSync('pdflatex --version', { stdio: 'ignore' });
-  } catch {
-    return { exported: false };
-  }
 
-  // Compile LaTeX to PDF in the resume directory
-  const texDir = dirname(texPath);
-  const texBasename = texPath.split(/[/\\]/).pop()!.replace(/\.tex$/i, '');
-
-  try {
-    const { execSync } = await import('child_process');
-    // Run pdflatex twice (for proper references)
-    execSync(`pdflatex -interaction=nonstopmode "${texBasename}.tex"`, {
-      cwd: texDir,
-      stdio: 'ignore',
-    });
-    execSync(`pdflatex -interaction=nonstopmode "${texBasename}.tex"`, {
+    const texDir = dirname(texPath);
+    const texBasename = texFilename.replace(/\.tex$/i, '');
+    execSync(`pdflatex -interaction=nonstopmode -output-directory "${docsDir}" "${texBasename}.tex"`, {
       cwd: texDir,
       stdio: 'ignore',
     });
 
-    // Copy PDF to Documents/resume
-    const generatedPDF = join(texDir, `${texBasename}.pdf`);
-    if (existsSync(generatedPDF)) {
-      const destPDF = join(docsDir, `${texBasename}.pdf`);
-      const fs = await import('fs');
-      fs.copyFileSync(generatedPDF, destPDF);
-      return { exported: true, pdfPath: destPDF };
+    if (existsSync(destPDF)) {
+      return { exported: true, pdfPath: destPDF, texCopied: true };
     }
   } catch {
-    return { exported: false };
+    // pdflatex not available
   }
 
-  return { exported: false };
+  // .tex was copied, PDF compilation not available
+  return { exported: false, texCopied: true };
+}
+
+async function importNodeLatex(): Promise<any | null> {
+  try {
+    // Try importing — if already installed it loads immediately
+    const mod = await import('node-latex');
+    return mod.default ?? mod;
+  } catch {
+    // Not installed — try to install it on the fly
+    try {
+      logger.dimmed('Installing node-latex for PDF compilation...');
+      const { execSync } = await import('child_process');
+      execSync('npm install -g node-latex --silent', { stdio: 'ignore' });
+      const mod = await import('node-latex');
+      return mod.default ?? mod;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function compileWithNodeLatex(latex: any, source: string, texPath: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const { Readable } = require('stream');
+    const input = Readable.from([source]);
+
+    // node-latex expects the .tex inputs directory for \include support
+    const options = { inputs: dirname(texPath) };
+    const output = latex(input, options);
+
+    const chunks: Buffer[] = [];
+    output.on('data', (chunk: Buffer) => chunks.push(chunk));
+    output.on('end', () => resolve(Buffer.concat(chunks)));
+    output.on('error', reject);
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
