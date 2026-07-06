@@ -13,6 +13,27 @@ export async function cmdLogin(): Promise<void> {
     return;
   }
 
+  // Detect bad env var upfront and guide through the fix interactively
+  const envToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  const envVarName = process.env.GITHUB_TOKEN ? 'GITHUB_TOKEN' : process.env.GH_TOKEN ? 'GH_TOKEN' : null;
+
+  if (envVarName && envToken) {
+    const spin = spinner(`Checking ${envVarName} env var...`).start();
+    const valid = await isTokenValid(envToken);
+    if (valid) {
+      spin.succeed(`${envVarName} is already valid — you're good to go!`);
+      const user = await getGitHubUser(envToken);
+      if (user) logger.success(`Authenticated as ${chalk.bold(user)}`);
+      return;
+    }
+    spin.fail(`${envVarName} env var is set but rejected by GitHub (bad/expired token)`);
+    logger.blank();
+    logger.warn(`This env var overrides everything — fixing it now.`);
+    logger.blank();
+    await fixBadEnvVar(envVarName);
+    return;
+  }
+
   const ghUser = checkGhCli();
 
   // If gh CLI is already authenticated, just grab the token silently — no prompt needed
@@ -104,6 +125,59 @@ export async function cmdLogin(): Promise<void> {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+async function fixBadEnvVar(envVarName: string): Promise<void> {
+  logger.info('Step 1 of 2 — Get a valid GitHub token');
+  logger.blank();
+  logger.dimmed('Create one at: https://github.com/settings/tokens/new');
+  logger.dimmed('Required scopes: repo, read:user');
+  logger.blank();
+
+  let token = '';
+  while (true) {
+    const { raw } = await inquirer.prompt([{
+      type: 'input',
+      name: 'raw',
+      message: 'Paste your new GitHub token:',
+      validate: (v: string) => v.trim().length > 0 || 'Cannot be empty',
+    }]);
+
+    token = sanitize(raw);
+    const spin = spinner('Verifying...').start();
+    const valid = await isTokenValid(token);
+    if (valid) {
+      const user = await getGitHubUser(token);
+      spin.succeed(`Valid! Authenticated as ${chalk.bold(user ?? 'unknown')}`);
+      break;
+    }
+    spin.fail('GitHub still rejected that token. Check the token and try again.');
+  }
+
+  // Save to config file
+  const config = loadConfig();
+  config.github = config.github ?? {};
+  config.github.token = token;
+  saveConfig(config);
+  logger.success('Token saved to ~/.autogit/config.json');
+  logger.blank();
+
+  // Step 2 — Fix the env var in the current process AND print commands
+  logger.info('Step 2 of 2 — Fix the environment variable');
+  logger.blank();
+  logger.dimmed(`${envVarName} is still set to the bad value in your shell.`);
+  logger.dimmed('Run ONE of these in your terminal right now:');
+  logger.blank();
+  console.log(chalk.bold('  PowerShell:'));
+  console.log(chalk.cyan(`  $env:${envVarName} = "${token}"`));
+  logger.blank();
+  console.log(chalk.bold('  CMD:'));
+  console.log(chalk.cyan(`  set ${envVarName}=${token}`));
+  logger.blank();
+  logger.dimmed('Or to permanently remove it from Windows:');
+  console.log(chalk.cyan(`  [System.Environment]::SetEnvironmentVariable("${envVarName}", $null, "User")`));
+  logger.blank();
+  logger.success('After running that command, autogit will work in all future terminals.');
+}
+
 async function checkTokenSources(): Promise<void> {
   logger.header('Token source diagnosis');
   logger.blank();
@@ -164,41 +238,61 @@ async function checkTokenSources(): Promise<void> {
 
 async function verifyToken(token: string): Promise<void> {
   const spin = spinner('Verifying with GitHub...').start();
-  try {
-    const res = await fetch('https://api.github.com/user', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-Agent': 'autogit-cli',
-      },
-    });
+  const res = await rawGitHubFetch(token);
 
-    if (res.ok) {
-      const user = (await res.json()) as any;
-      spin.succeed(`Authenticated as ${chalk.bold(user.login)} ✔`);
-      return;
-    }
-
-    const body = (await res.json()) as any;
-    spin.fail(`GitHub rejected the token (HTTP ${res.status})`);
-    logger.blank();
-
-    if (res.status === 401) {
-      logger.warn('401 Bad credentials — common causes:');
-      logger.dimmed('  • Token was copied incorrectly (missing chars, extra spaces)');
-      logger.dimmed('  • Token has been revoked or expired');
-      logger.dimmed('  • Token is a fine-grained token missing "repo" permission');
-      logger.blank();
-      logger.dimmed('Fix:');
-      logger.dimmed('  1. Go to https://github.com/settings/tokens');
-      logger.dimmed('  2. Delete the old token and create a new one');
-      logger.dimmed('  3. Scopes needed: repo, read:user');
-      logger.dimmed('  4. Run "autogit login" again and paste the new token');
-    } else {
-      logger.warn(`GitHub error: ${body?.message ?? res.statusText}`);
-    }
-  } catch (e: any) {
-    spin.fail(`Network error while verifying: ${e.message}`);
+  if (res.ok) {
+    const user = (await res.json()) as any;
+    spin.succeed(`Authenticated as ${chalk.bold(user.login)} ✔`);
+    return;
   }
+
+  const body = (await res.json()) as any;
+  spin.fail(`GitHub rejected the token (HTTP ${res.status})`);
+  logger.blank();
+
+  if (res.status === 401) {
+    logger.warn('401 Bad credentials — common causes:');
+    logger.dimmed('  • Token was copied incorrectly (missing chars, extra spaces)');
+    logger.dimmed('  • Token has been revoked or expired');
+    logger.dimmed('  • Token is a fine-grained token missing "repo" permission');
+    logger.blank();
+    logger.dimmed('Fix:');
+    logger.dimmed('  1. Go to https://github.com/settings/tokens');
+    logger.dimmed('  2. Delete the old token and create a new one');
+    logger.dimmed('  3. Scopes needed: repo, read:user');
+    logger.dimmed('  4. Run "autogit login" again and paste the new token');
+  } else {
+    logger.warn(`GitHub error: ${body?.message ?? res.statusText}`);
+  }
+}
+
+async function isTokenValid(token: string): Promise<boolean> {
+  try {
+    const res = await rawGitHubFetch(token);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function getGitHubUser(token: string): Promise<string | null> {
+  try {
+    const res = await rawGitHubFetch(token);
+    if (!res.ok) return null;
+    const data = (await res.json()) as any;
+    return data.login ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function rawGitHubFetch(token: string): Promise<Response> {
+  return fetch('https://api.github.com/user', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'User-Agent': 'autogit-cli',
+    },
+  });
 }
 
 function checkGhCli(): string | null {
