@@ -64,7 +64,8 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   // Step 4: Additional documentation
   const docs = await handleDocs(rootDir, analysis, scan, useAI, options);
 
-  // Step 5: Resume auto-update
+  // Step 5: Resume auto-update — runs AFTER git init but BEFORE commit
+  // so the updated resume can be included in the same commit
   if (!options.skipResume && !options.dryRun) {
     await handleResume(rootDir, useAI, options);
   } else if (options.dryRun) {
@@ -74,7 +75,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   // Step 6: Git operations
   await handleGit(rootDir, analysis, readmeResult, docs, useAI, options);
 
-  // Step 6: GitHub
+  // Step 7: GitHub
   if (!options.skipGithub) {
     resolvedRepoUrl = await handleGitHub(rootDir, analysis, options);
   }
@@ -256,7 +257,7 @@ async function handleGitHub(
     return undefined;
   }
 
-  await getGitStatus(rootDir);
+  await getGitStatus(rootDir); // ensure git is initialised before pushing
 
   try {
     const user = await getAuthenticatedUser();

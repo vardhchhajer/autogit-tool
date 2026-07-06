@@ -6,7 +6,8 @@ import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
 import { getProvider, type AIMessage } from '../ai/provider.js';
 import { logger, spinner } from '../utils/logger.js';
 
-const require = createRequire(import.meta.url);
+// createRequire is needed to use CJS modules (node-latex, stream) inside ESM
+const _require = createRequire(import.meta.url);
 
 export interface ResumeConfig {
   path: string;
@@ -189,13 +190,11 @@ async function importNodeLatex(): Promise<any | null> {
 
 function compileWithNodeLatex(latex: any, source: string, texPath: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const { Readable } = require('stream');
+    // Use _require (CJS-compat) to load stream inside ESM
+    const { Readable } = _require('stream');
     const input = Readable.from([source]);
-
-    // node-latex expects the .tex inputs directory for \include support
     const options = { inputs: dirname(texPath) };
     const output = latex(input, options);
-
     const chunks: Buffer[] = [];
     output.on('data', (chunk: Buffer) => chunks.push(chunk));
     output.on('end', () => resolve(Buffer.concat(chunks)));

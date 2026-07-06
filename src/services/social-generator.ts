@@ -70,9 +70,9 @@ export async function openLinkedInShare(repoUrl: string): Promise<void> {
  * Open X (Twitter) compose window with the tweet pre-filled.
  */
 export async function openTwitterShare(tweet: string, repoUrl: string): Promise<void> {
-  // Replace [GITHUB_LINK] placeholder with the real URL
-  const text = tweet.replace('[GITHUB_LINK]', repoUrl).replace(/\[GITHUB_LINK\]/g, repoUrl);
-  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+  // tweet text already has [GITHUB_LINK] replaced by the caller
+  // repoUrl kept as param for future use (e.g. utm params)
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
   await open(url);
   logger.success('X (Twitter) compose window opened in browser — review and click Post');
 }

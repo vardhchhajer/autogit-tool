@@ -180,6 +180,14 @@ export async function generateCommitMessage(rootDir: string, useAI: boolean): Pr
 
 export async function commit(rootDir: string, message: string): Promise<void> {
   const git = simpleGit(rootDir);
+  const status = await git.status();
+
+  // Nothing staged — skip commit silently instead of throwing
+  if (status.staged.length === 0) {
+    logger.dimmed('Nothing to commit — working tree clean');
+    return;
+  }
+
   await git.commit(message);
 }
 

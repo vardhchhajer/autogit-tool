@@ -339,8 +339,13 @@ function detectDeployment(rootDir: string, scan: ScanResult, analysis: ProjectAn
 }
 
 function detectDatabases(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
+  // Only scan config/source files — explicitly skip .env to avoid reading secrets
   const allContent = scan.files
-    .filter(f => ['.json', '.toml', '.yaml', '.yml', '.env', '.ts', '.js', '.py'].includes(f.extension))
+    .filter(f =>
+      ['.json', '.toml', '.yaml', '.yml', '.ts', '.js', '.py'].includes(f.extension) &&
+      !f.name.startsWith('.env') &&
+      !f.relativePath.includes('.env')
+    )
     .slice(0, 30)
     .map(f => readFileContent(f.path, 10000) || '')
     .join('\n')
@@ -407,14 +412,16 @@ function detectEnvVars(rootDir: string, scan: ScanResult, analysis: ProjectAnaly
     }
   }
 
-  // Also check .env if it exists (just get keys, not values)
-  const envContent = readFileContent(join(rootDir, '.env'));
-  if (envContent && analysis.envVars.length === 0) {
-    const vars = envContent.split('\n')
-      .filter(line => line.includes('=') && !line.startsWith('#'))
-      .map(line => line.split('=')[0].trim())
-      .filter(v => v.length > 0);
-    analysis.envVars.push(...vars);
+  // Also check .env if it exists — extract ONLY key names, never values
+  if (analysis.envVars.length === 0) {
+    const envContent = readFileContent(join(rootDir, '.env'));
+    if (envContent) {
+      const vars = envContent.split('\n')
+        .filter(line => line.includes('=') && !line.startsWith('#') && !line.startsWith('//'))
+        .map(line => line.split('=')[0].trim())
+        .filter(v => v.length > 0 && /^[A-Z0-9_]+$/i.test(v)); // only valid env var names
+      analysis.envVars.push(...vars);
+    }
   }
 
   // Deduplicate
@@ -458,9 +465,6 @@ function detectArchitecture(scan: ScanResult, analysis: ProjectAnalysis): void {
 }
 
 function detectTestFramework(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
-  const testDirs = scan.directories.filter(d =>
-    d.includes('test') || d.includes('spec') || d.includes('__tests__')
-  );
   const testFiles = scan.files.filter(f =>
     f.name.includes('.test.') || f.name.includes('.spec.') || f.name.includes('_test.')
   );
