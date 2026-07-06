@@ -7,7 +7,9 @@ import { generateReadme, writeReadme, displayDiff, type ReadmeResult } from '../
 import { generateDocs, writeDocs, type DocFile } from '../services/docs-generator.js';
 import { getGitStatus, initGit, generateGitignore, stageAll, generateCommitMessage, commit, push, addRemote } from '../services/git-service.js';
 import { createRepo, getAuthenticatedUser, repoExists, generateTopics, isGitHubConfigured } from '../services/github-service.js';
-import { generateSocialContent, type SocialContent } from '../services/social-generator.js';
+import { generateSocialContent } from '../services/social-generator.js';
+import { runResumeUpdate } from '../commands/resume.js';
+import { loadConfig } from '../config/manager.js';
 import { logger, spinner } from '../utils/logger.js';
 
 export interface PipelineOptions {
@@ -16,6 +18,7 @@ export interface PipelineOptions {
   skipReadme?: boolean;
   skipLinkedin?: boolean;
   skipGithub?: boolean;
+  skipResume?: boolean;
   noAI?: boolean;
   force?: boolean;
   regenerate?: boolean;
@@ -60,7 +63,14 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   // Step 4: Additional documentation
   const docs = await handleDocs(rootDir, analysis, scan, useAI, options);
 
-  // Step 5: Git operations
+  // Step 5: Resume auto-update
+  if (!options.skipResume && !options.dryRun) {
+    await handleResume(rootDir, useAI, options);
+  } else if (options.dryRun) {
+    logger.dimmed('[dry-run] Would update resume (if configured)');
+  }
+
+  // Step 6: Git operations
   await handleGit(rootDir, analysis, readmeResult, docs, useAI, options);
 
   // Step 6: GitHub
@@ -324,4 +334,30 @@ async function handleSocialContent(
 
   logger.blank();
   logger.dimmed('Tip: Use "autogit linkedin" to see all versions (short/medium/long)');
+}
+
+async function handleResume(
+  rootDir: string,
+  useAI: boolean,
+  options: PipelineOptions
+): Promise<void> {
+  const config = loadConfig();
+
+  // Skip silently if resume not configured and --yes is set (non-interactive mode)
+  if (!config.resume?.path) {
+    if (!options.yes) {
+      // Offer setup only in interactive mode
+      await runResumeUpdate(rootDir, useAI, true);
+    }
+    return;
+  }
+
+  // Skip if resume auto-update is explicitly disabled in config
+  if (config.resume.enabled === false) {
+    logger.dimmed('Resume auto-update disabled (run "autogit resume" to update manually)');
+    return;
+  }
+
+  // Run resume update — interactive unless --yes
+  await runResumeUpdate(rootDir, useAI, !options.yes);
 }

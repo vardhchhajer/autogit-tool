@@ -15,6 +15,7 @@ import { cmdAnalyze } from './commands/analyze.js';
 import { cmdDoctor } from './commands/doctor.js';
 import { cmdConfig } from './commands/config.js';
 import { cmdLogin } from './commands/login.js';
+import { cmdResume } from './commands/resume.js';
 import { registerOctokitReset } from './config/manager.js';
 import { resetOctokitCache } from './services/github-service.js';
 
@@ -36,6 +37,7 @@ program
   .option('--skip-readme', 'Skip README generation')
   .option('--skip-linkedin', 'Skip LinkedIn post generation')
   .option('--skip-github', 'Skip GitHub operations')
+  .option('--skip-resume', 'Skip resume auto-update')
   .option('--no-ai', 'Disable AI-powered generation')
   .option('--force', 'Force overwrite existing files')
   .option('--regenerate', 'Regenerate existing documentation')
@@ -48,7 +50,8 @@ program
         skipReadme: opts.skipReadme,
         skipLinkedin: opts.skipLinkedin,
         skipGithub: opts.skipGithub,
-        noAI: !opts.ai, // commander parses --no-ai as ai: false
+        skipResume: opts.skipResume,
+        noAI: !opts.ai,
         force: opts.force,
         regenerate: opts.regenerate,
         private: opts.private,
@@ -144,6 +147,16 @@ program
   .option('--debug', 'Show stored key details for troubleshooting')
   .action(async (opts) => {
     try { await cmdConfig(opts); } catch (e: any) { handleError(e); }
+  });
+
+program
+  .command('resume')
+  .description('Update your LaTeX resume with the current project')
+  .option('--setup', 'Configure resume file path and owner info')
+  .option('--show', 'Show current resume configuration')
+  .option('--no-ai', 'Use template instead of AI for bullet generation')
+  .action(async (opts) => {
+    try { await cmdResume(opts); } catch (e: any) { handleError(e); }
   });
 
 program

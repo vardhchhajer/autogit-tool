@@ -57,6 +57,12 @@ export interface AutoGitConfig {
     autoConfirm?: boolean;
     linkedinStyle?: 'professional' | 'casual' | 'technical';
   };
+  resume?: {
+    enabled?: boolean;
+    path?: string;        // path to .tex file
+    ownerName?: string;
+    ownerEmail?: string;
+  };
 }
 
 let cachedConfig: AutoGitConfig | null = null;
