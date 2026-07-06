@@ -24,14 +24,21 @@ export interface CreateRepoOptions {
 
 let octokitInstance: Octokit | null = null;
 
+/** Call this after saving a new token so the cached instance is replaced. */
+export function resetOctokitCache(): void {
+  octokitInstance = null;
+}
+
 function getOctokit(): Octokit {
   if (octokitInstance) return octokitInstance;
 
   const token = getGitHubToken();
   if (!token) {
     throw new Error(
-      'GitHub token not found. Set GITHUB_TOKEN environment variable, ' +
-      'run "autogit login", or configure via "autogit config".'
+      'No GitHub token found.\n' +
+      '  → Run: autogit login\n' +
+      '  → Or set: GITHUB_TOKEN environment variable\n' +
+      '  → Create token at: https://github.com/settings/tokens (scopes: repo, read:user)'
     );
   }
 

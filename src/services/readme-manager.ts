@@ -126,13 +126,14 @@ function generateTemplateReadme(analysis: ProjectAnalysis): string {
   sections.push(`## Installation\n`);
   if (analysis.packageManager === 'npm' || analysis.packageManager === 'yarn' || analysis.packageManager === 'pnpm' || analysis.packageManager === 'bun') {
     const pm = analysis.packageManager;
+    const installCmd = pm === 'yarn' ? 'yarn' : pm === 'pnpm' ? 'pnpm install' : pm === 'bun' ? 'bun install' : 'npm install';
     sections.push('```bash');
     sections.push(`# Clone the repository`);
     sections.push(`git clone https://github.com/USERNAME/${analysis.name}.git`);
     sections.push(`cd ${analysis.name}`);
     sections.push('');
     sections.push(`# Install dependencies`);
-    sections.push(`${pm} install`);
+    sections.push(installCmd);
     sections.push('```\n');
   } else if (analysis.packageManager === 'cargo') {
     sections.push('```bash');
@@ -155,7 +156,7 @@ function generateTemplateReadme(analysis: ProjectAnalysis): string {
 
   // Environment Variables
   if (analysis.envVars.length) {
-    sections.push(`## Environment Variables\n`);
+    sections.push(`## Configuration\n`);
     sections.push('Create a `.env` file in the root directory:\n');
     sections.push('```env');
     for (const v of analysis.envVars) {
@@ -170,11 +171,21 @@ function generateTemplateReadme(analysis: ProjectAnalysis): string {
     sections.push('```bash\nnpm start\n```\n');
   } else if (analysis.packageManager === 'yarn') {
     sections.push('```bash\nyarn start\n```\n');
+  } else if (analysis.packageManager === 'pnpm') {
+    sections.push('```bash\npnpm start\n```\n');
+  } else if (analysis.packageManager === 'bun') {
+    sections.push('```bash\nbun start\n```\n');
   } else if (analysis.packageManager === 'cargo') {
     sections.push('```bash\ncargo run\n```\n');
   } else if (analysis.packageManager?.includes('pip')) {
     sections.push('```bash\npython main.py\n```\n');
+  } else {
+    sections.push('*Add usage instructions here.*\n');
   }
+
+  // Contributing
+  sections.push(`## Contributing\n`);
+  sections.push(`Contributions are welcome! Please feel free to submit a Pull Request.\n`);
 
   // License
   if (analysis.license) {

@@ -15,6 +15,11 @@ import { cmdAnalyze } from './commands/analyze.js';
 import { cmdDoctor } from './commands/doctor.js';
 import { cmdConfig } from './commands/config.js';
 import { cmdLogin } from './commands/login.js';
+import { registerOctokitReset } from './config/manager.js';
+import { resetOctokitCache } from './services/github-service.js';
+
+// Wire Octokit cache reset whenever config is saved
+registerOctokitReset(resetOctokitCache);
 
 const program = new Command();
 

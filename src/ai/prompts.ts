@@ -37,7 +37,7 @@ ${existingReadme}
 INSTRUCTIONS:
 - Preserve all existing custom content, badges, images, and links.
 - Improve formatting and structure.
-- Fill in missing sections (Features, Installation, Usage, Configuration, etc.).
+- Fill in missing sections: Features, Installation (with clear clone/install/run steps), Configuration (if env vars), Usage, Contributing.
 - Update outdated information based on the project context.
 - Do NOT invent features not supported by the project context.
 - Do NOT overwrite custom sections the user has written.
@@ -51,12 +51,15 @@ PROJECT CONTEXT:
 ${context}
 
 INSTRUCTIONS:
-- Include: Title, Description, Features, Tech Stack, Installation, Usage, Configuration, Environment Variables (if any), Folder Structure (brief), API Documentation (if applicable), Deployment, Contributing, License, Author.
-- Only include sections relevant to this project.
-- Do NOT invent features not supported by the project context.
-- Use professional Markdown formatting with proper headings, code blocks, and badges.
+- Include these sections in order: Title, Description, Features, Tech Stack, Installation, Configuration (if env vars exist), Usage, API Documentation (if APIs detected), Contributing, License.
+- Installation: Show clear step-by-step commands (clone → cd → install dependencies → run).
+- Usage: Include the main command to run the project (npm start, cargo run, python main.py, etc.).
+- Configuration: If environment variables exist, show a .env example.
+- Only include sections relevant to this project based on the context above.
+- Do NOT invent features, APIs, or capabilities not mentioned in the project context.
+- Use professional Markdown formatting with proper headings, code blocks, and lists.
 - Make the README informative, concise, and developer-friendly.
-- Return ONLY the README content, no explanations.`;
+- Return ONLY the README content, no explanations or preamble.`;
 }
 
 export function commitMessagePrompt(changes: string): string {

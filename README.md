@@ -19,12 +19,16 @@ The autogit-cli project aims to simplify the process of managing project documen
 Ensure you have Node.js and npm installed on your system.
 
 ### Clone and Install
-```bash
-# Clone the repository
+1. Clone the repository: 
+    ```bash
 git clone https://github.com/USERNAME/autogit-cli.git
+```
+2. Change into the project directory:
+    ```bash
 cd autogit-cli
-
-# Install dependencies
+```
+3. Install dependencies:
+    ```bash
 npm install
 ```
 
@@ -35,10 +39,13 @@ npm start
 ```
 
 ## Configuration
-Currently, the application does not support custom configuration options. However, this may be added in future releases.
+Currently, the application does not support custom configuration options via environment variables. However, this may be added in future releases.
 
 ## Contributing
-Contributions are welcome. Please submit a pull request with your proposed changes.
+Contributions are welcome. To contribute to this project, please follow these steps:
+1. Fork the repository.
+2. Make your proposed changes.
+3. Submit a pull request with your changes.
 
 ## License
 This project is currently unlicensed. License information will be added in future releases.

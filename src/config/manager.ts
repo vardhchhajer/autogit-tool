@@ -1,6 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { getConfigDir, getConfigPath } from '../utils/platform.js';
 
+// Avoid circular import — we call this lazily after github token changes
+let _resetOctokit: (() => void) | null = null;
+export function registerOctokitReset(fn: () => void): void {
+  _resetOctokit = fn;
+}
+
 export type AIProviderName =
   | 'openai'
   | 'anthropic'
@@ -82,6 +88,8 @@ export function saveConfig(config: AutoGitConfig): void {
   }
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), 'utf-8');
   cachedConfig = config;
+  // Reset Octokit if the GitHub token changed
+  _resetOctokit?.();
 }
 
 export function getConfigValue<K extends keyof AutoGitConfig>(
