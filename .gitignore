@@ -6,3 +6,8 @@ dist/
 coverage/
 .DS_Store
 Thumbs.db
+
+# Resume files — personal, not for public repo
+resume/*.tex
+resume/*.pdf
+resume/*.backup-*.tex
