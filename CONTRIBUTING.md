@@ -1,11 +1,11 @@
 # Contributing
 
-Thank you for your interest in contributing to autogit-cli!
+Thank you for your interest in contributing to autogit-tool!
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/autogit-cli.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/autogit-tool.git`
 3. Create a branch: `git checkout -b feature/your-feature`
 4. Install dependencies: `npm install`
 5. Make your changes

@@ -290,7 +290,7 @@ async function rawGitHubFetch(token: string): Promise<Response> {
   return fetch('https://api.github.com/user', {
     headers: {
       Authorization: `Bearer ${token}`,
-      'User-Agent': 'autogit-cli',
+      'User-Agent': 'autogit-tool',
     },
   });
 }

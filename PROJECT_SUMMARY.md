@@ -1,6 +1,6 @@
 # PROJECT_SUMMARY.md
 ## Overview
-The autogit-cli project is a command-line interface tool designed to automate project documentation, GitHub publishing, and social media content generation. This tool aims to streamline development workflows, reducing manual effort and increasing productivity. Version 1.0.0 is the initial release of this project.
+The autogit-tool project is a command-line interface tool designed to automate project documentation, GitHub publishing, and social media content generation. This tool aims to streamline development workflows, reducing manual effort and increasing productivity. Version 1.0.0 is the initial release of this project.
 
 ## Key Technologies
 * Language: TypeScript
@@ -8,7 +8,7 @@ The autogit-cli project is a command-line interface tool designed to automate pr
 * Build System: npm scripts
 
 ## Architecture Overview
-The autogit-cli project follows a single-module architecture, keeping the codebase simple and easy to maintain. This modular approach allows for straightforward development and testing.
+The autogit-tool project follows a single-module architecture, keeping the codebase simple and easy to maintain. This modular approach allows for straightforward development and testing.
 
 ## Main Features
 * Automated project documentation generation

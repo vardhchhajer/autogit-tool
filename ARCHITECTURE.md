@@ -1,6 +1,6 @@
 # Architecture
 ## Overview
-The autogit-cli project is designed to automate project documentation, GitHub publishing, and social media content generation. This document outlines the high-level architecture of the project.
+The autogit-tool project is designed to automate project documentation, GitHub publishing, and social media content generation. This document outlines the high-level architecture of the project.
 
 ## High-Level Architecture Diagram
 ```
@@ -66,7 +66,7 @@ The Services component provides a set of reusable functions for tasks such as Gi
 The Utils component contains utility functions used throughout the project.
 
 ## Data Flow
-The data flow in the autogit-cli project is as follows:
+The data flow in the autogit-tool project is as follows:
 1. The user provides input through the Commands component.
 2. The Commands component triggers the Pipeline component to execute the corresponding tasks.
 3. The Pipeline component uses the Services component to interact with external APIs and perform file operations.

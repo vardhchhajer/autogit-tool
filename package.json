@@ -33,13 +33,13 @@
   ],
   "author": "Vardh Chhajer <chhajervardh@gmail.com>",
   "license": "MIT",
-  "homepage": "https://github.com/membranegaming/autogit-cli",
+  "homepage": "https://github.com/vardhchhajer/autogit-tool",
   "repository": {
     "type": "git",
-    "url": "https://github.com/membranegaming/autogit-cli.git"
+    "url": "https://github.com/vardhchhajer/autogit-tool.git"
   },
   "bugs": {
-    "url": "https://github.com/membranegaming/autogit-cli/issues"
+    "url": "https://github.com/vardhchhajer/autogit-tool/issues"
   },
   "engines": {
     "node": ">=18.0.0"

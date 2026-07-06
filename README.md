@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/autogit-tool.svg)](https://www.npmjs.com/package/autogit-tool)
 [![npm downloads](https://img.shields.io/npm/dm/autogit-tool.svg)](https://www.npmjs.com/package/autogit-tool)
-[![license](https://img.shields.io/npm/l/autogit-tool.svg)](https://github.com/membranegaming/autogit-cli/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/autogit-tool.svg)](https://github.com/vardhchhajer/autogit-tool/blob/master/LICENSE)
 [![node](https://img.shields.io/node/v/autogit-tool.svg)](https://www.npmjs.com/package/autogit-tool)
 
 > Run `autogit` in any project folder. It reads your code, writes your docs, commits, pushes to GitHub, updates your resume, and generates your LinkedIn post — in one command.
@@ -317,8 +317,8 @@ README, docs, commit messages, resume entries, and social posts are all generate
 Pull requests are welcome.
 
 ```bash
-git clone https://github.com/membranegaming/autogit-cli.git
-cd autogit-cli
+git clone https://github.com/vardhchhajer/autogit-tool.git
+cd autogit-tool
 npm install
 npm run build        # compile TypeScript → dist/
 npm link             # install autogit globally from this local folder
@@ -353,9 +353,9 @@ src/
 
 ## License
 
-MIT © [Vardh Chhajer](https://github.com/membranegaming)
+MIT © [Vardh Chhajer](https://github.com/vardhchhajer)
 
 ---
 
 **npm:** https://www.npmjs.com/package/autogit-tool
-**GitHub:** https://github.com/membranegaming/autogit-cli
+**GitHub:** https://github.com/vardhchhajer/autogit-tool
