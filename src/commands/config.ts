@@ -375,11 +375,49 @@ function debugConfig(): void {
   logger.header('Debug info');
   logger.blank();
 
-  logger.info(`Active provider: ${chalk.bold(ai.provider || '(not set)')}`);
-  logger.info(`Model override: ${ai.model || '(using provider default)'}`);
+  logger.info(`Active provider: ${chalk.bold(ai.provider || '(not set, defaults to openai)')}`);
+  logger.info(`Model override:  ${ai.model || '(using provider default)'}`);
   logger.blank();
 
-  // Show keys with length + partial reveal
+  // Show ENV VARS that are set — these override the config file
+  const envVars: Array<[string, string | undefined]> = [
+    ['AUTOGIT_AI_PROVIDER', process.env['AUTOGIT_AI_PROVIDER']],
+    ['AUTOGIT_AI_MODEL',    process.env['AUTOGIT_AI_MODEL']],
+    ['OPENAI_API_KEY',      process.env['OPENAI_API_KEY']],
+    ['ANTHROPIC_API_KEY',   process.env['ANTHROPIC_API_KEY']],
+    ['GEMINI_API_KEY',      process.env['GEMINI_API_KEY']],
+    ['OPENROUTER_API_KEY',  process.env['OPENROUTER_API_KEY']],
+    ['MISTRAL_API_KEY',     process.env['MISTRAL_API_KEY']],
+    ['GROQ_API_KEY',        process.env['GROQ_API_KEY']],
+    ['DEEPSEEK_API_KEY',    process.env['DEEPSEEK_API_KEY']],
+    ['PERPLEXITY_API_KEY',  process.env['PERPLEXITY_API_KEY']],
+    ['TOGETHER_API_KEY',    process.env['TOGETHER_API_KEY']],
+    ['COHERE_API_KEY',      process.env['COHERE_API_KEY']],
+    ['XAI_API_KEY',         process.env['XAI_API_KEY']],
+    ['AZURE_OPENAI_KEY',    process.env['AZURE_OPENAI_KEY']],
+  ];
+
+  const setEnvVars = envVars.filter(([, v]) => v);
+  if (setEnvVars.length > 0) {
+    logger.header('Environment variables (these OVERRIDE the config file)');
+    for (const [name, val] of setEnvVars) {
+      const preview = val!.length > 8 ? `${val!.slice(0, 4)}***${val!.slice(-4)}` : '***';
+      const hasInvisible = /[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/.test(val!);
+      const warn = hasInvisible ? chalk.red(' ⚠ invisible chars!') : '';
+      console.log(`  ${chalk.yellow('!')} ${name.padEnd(22)} ${chalk.cyan(`[${val!.length} chars]`)} ${chalk.dim(preview)}${warn}`);
+    }
+    logger.blank();
+    logger.warn('Env vars take priority over ~/.autogit/config.json');
+    logger.dimmed('To use the config file value instead, unset the env var:');
+    logger.dimmed('  PowerShell: Remove-Item Env:GROQ_API_KEY');
+    logger.dimmed('  CMD:        set GROQ_API_KEY=');
+  } else {
+    logger.dimmed('No AI-related environment variables are set — config file is used.');
+  }
+
+  logger.blank();
+
+  // Config file keys
   const keyMap: Array<[string, string | undefined]> = [
     ['openaiKey',      ai.openaiKey],
     ['anthropicKey',   ai.anthropicKey],
@@ -395,7 +433,7 @@ function debugConfig(): void {
     ['azureOpenAIKey', ai.azureOpenAIKey],
   ];
 
-  logger.header('Stored keys');
+  logger.header('Config file keys (~/.autogit/config.json)');
   for (const [name, key] of keyMap) {
     if (!key) {
       console.log(chalk.gray(`  ${name.padEnd(18)} (not set)`));
@@ -405,11 +443,37 @@ function debugConfig(): void {
     const preview = len > 8 ? `${key.slice(0, 4)}***${key.slice(-4)}` : `${key.slice(0, 2)}***`;
     const hasInvisible = /[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/.test(key);
     const warning = hasInvisible ? chalk.red(' ⚠ contains invisible chars!') : '';
-    console.log(`  ${name.padEnd(18)} ${chalk.cyan(`[${len} chars]`)} ${chalk.dim(preview)}${warning}`);
+    console.log(`  ${chalk.green('✔')} ${name.padEnd(18)} ${chalk.cyan(`[${len} chars]`)} ${chalk.dim(preview)}${warning}`);
   }
 
   logger.blank();
-  logger.dimmed('Run "autogit config --test" to verify the active provider\'s key.');
+
+  // Show what value will ACTUALLY be used at runtime
+  logger.header('Effective values (what AutoGit actually uses)');
+  const groqEnv   = process.env.GROQ_API_KEY;
+  const activeProvider = process.env.AUTOGIT_AI_PROVIDER || ai.provider || 'openai';
+  const activeKey: Record<string, string | undefined> = {
+    groq:       groqEnv        || ai.groqKey,
+    openai:     process.env.OPENAI_API_KEY      || ai.openaiKey,
+    anthropic:  process.env.ANTHROPIC_API_KEY   || ai.anthropicKey,
+    gemini:     process.env.GEMINI_API_KEY       || ai.geminiKey,
+    openrouter: process.env.OPENROUTER_API_KEY   || ai.openrouterKey,
+    mistral:    process.env.MISTRAL_API_KEY      || ai.mistralKey,
+    deepseek:   process.env.DEEPSEEK_API_KEY     || ai.deepseekKey,
+    perplexity: process.env.PERPLEXITY_API_KEY   || ai.perplexityKey,
+    together:   process.env.TOGETHER_API_KEY     || ai.togetherKey,
+    cohere:     process.env.COHERE_API_KEY       || ai.cohereKey,
+    xai:        process.env.XAI_API_KEY          || ai.xaiKey,
+  };
+  const usedKey = activeKey[activeProvider];
+  const usedPreview = usedKey
+    ? (usedKey.length > 8 ? `${usedKey.slice(0, 4)}***${usedKey.slice(-4)}` : '***')
+    : '(none)';
+
+  console.log(`  Provider: ${chalk.bold(activeProvider)}`);
+  console.log(`  Key:      ${chalk.cyan(`[${usedKey?.length ?? 0} chars]`)} ${chalk.dim(usedPreview)}`);
+  logger.blank();
+  logger.dimmed('Run "autogit config --test" to verify this key with a live API call.');
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
