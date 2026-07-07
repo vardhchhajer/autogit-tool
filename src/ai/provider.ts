@@ -19,30 +19,62 @@ export interface AIProvider {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** OpenAI-compatible chat completions — used by OpenAI, Groq, DeepSeek,
- *  Perplexity, Together AI, xAI and OpenRouter (they all share the same shape). */
+const DEFAULT_TIMEOUT_MS = 60_000; // 60s — accommodates slow providers like NVIDIA NIM
+
+/** fetch() with an AbortController timeout */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** POST to an OpenAI-compatible endpoint with timeout + one retry on 5xx */
 async function openAICompatPost(
   url: string,
   apiKey: string,
   model: string,
   messages: AIMessage[],
   options?: { temperature?: number; maxTokens?: number },
-  extraHeaders: Record<string, string> = {}
+  extraHeaders: Record<string, string> = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<string> {
-  const response = await fetch(url, {
+  const body = JSON.stringify({
+    model,
+    messages,
+    temperature: options?.temperature ?? 0.7,
+    max_tokens: options?.maxTokens ?? 4096,
+  });
+
+  const init: RequestInit = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...extraHeaders,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.maxTokens ?? 4096,
-    }),
-  });
+    body,
+  };
+
+  let response = await fetchWithTimeout(url, init, timeoutMs);
+
+  // Retry once on 504/503 (common with NVIDIA NIM cold starts)
+  if (response.status === 504 || response.status === 503) {
+    await new Promise(r => setTimeout(r, 3000)); // wait 3s before retry
+    response = await fetchWithTimeout(url, init, timeoutMs);
+  }
 
   if (!response.ok) {
     const err = await response.text();
