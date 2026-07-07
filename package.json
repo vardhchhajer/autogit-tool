@@ -1,6 +1,6 @@
 {
   "name": "autogit-tool",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Automate project documentation, GitHub publishing, and social media content generation — run autogit in any project folder",
   "type": "module",
   "main": "dist/index.js",
@@ -51,20 +51,20 @@
   ],
   "dependencies": {
     "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
     "commander": "^12.1.0",
     "conf": "^13.0.1",
     "diff": "^5.2.0",
+    "dotenv": "^16.4.5",
     "globby": "^14.0.2",
     "inquirer": "^9.3.7",
-    "ora": "^8.1.0",
-    "simple-git": "^3.27.0",
-    "octokit": "^4.0.2",
-    "cli-table3": "^0.6.5",
     "marked": "^14.1.0",
     "marked-terminal": "^7.1.0",
-    "dotenv": "^16.4.5",
+    "node-latex": "^3.1.0",
+    "octokit": "^4.0.2",
     "open": "^10.1.0",
-    "node-latex": "^3.1.0"
+    "ora": "^8.1.0",
+    "simple-git": "^3.27.0"
   },
   "devDependencies": {
     "@types/diff": "^5.2.2",

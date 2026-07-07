@@ -171,20 +171,10 @@ export async function exportResumePDF(texPath: string): Promise<{ exported: bool
 
 async function importNodeLatex(): Promise<any | null> {
   try {
-    // Try importing — if already installed it loads immediately
     const mod = await import('node-latex');
     return mod.default ?? mod;
   } catch {
-    // Not installed — try to install it on the fly
-    try {
-      logger.dimmed('Installing node-latex for PDF compilation...');
-      const { execSync } = await import('child_process');
-      execSync('npm install -g node-latex --silent', { stdio: 'ignore' });
-      const mod = await import('node-latex');
-      return mod.default ?? mod;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
