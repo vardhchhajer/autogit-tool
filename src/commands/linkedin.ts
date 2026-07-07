@@ -11,7 +11,7 @@ export async function cmdLinkedin(opts: { ai?: boolean }): Promise<void> {
   logger.header('Social Media Content');
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   const useAI = opts.ai !== false;
 
   const content = await generateSocialContent(analysis, useAI);

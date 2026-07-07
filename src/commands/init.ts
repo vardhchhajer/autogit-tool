@@ -12,7 +12,7 @@ export async function cmdInit(): Promise<void> {
   logger.header('AutoGit Init');
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   const gitStatus = await getGitStatus(rootDir);
 
   if (gitStatus.isRepo) {

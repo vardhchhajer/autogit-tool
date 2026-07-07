@@ -12,7 +12,7 @@ export async function cmdAnalyze(opts: { ai?: boolean }): Promise<void> {
   logger.header('Project Analysis');
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   const useAI = opts.ai !== false;
 
   // Display project info

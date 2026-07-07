@@ -17,7 +17,7 @@ export async function cmdRelease(opts: { tag?: string; draft?: boolean }): Promi
   }
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   const user = await getAuthenticatedUser();
   const repoName = analysis.name;
 

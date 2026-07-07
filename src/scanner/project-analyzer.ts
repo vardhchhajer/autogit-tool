@@ -31,7 +31,7 @@ export interface ProjectAnalysis {
   componentCount: number;     // Number of UI components detected
 }
 
-export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalysis {
+export async function analyzeProject(rootDir: string, scan: ScanResult): Promise<ProjectAnalysis> {
   const analysis: ProjectAnalysis = {
     name: basename(rootDir),
     displayName: '',
@@ -75,14 +75,14 @@ export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalys
 
   // Detect package managers and frameworks
   detectNodeProject(rootDir, scan, analysis);
-  detectPythonProject(rootDir, scan, analysis);
+  await detectPythonProject(rootDir, scan, analysis);
   detectRustProject(rootDir, scan, analysis);
   detectGoProject(rootDir, scan, analysis);
   detectJavaProject(rootDir, scan, analysis);
   detectDotNetProject(rootDir, scan, analysis);
 
   // Deep code analysis — reads actual source files
-  deepCodeAnalysis(rootDir, scan, analysis);
+  await deepCodeAnalysis(rootDir, scan, analysis);
 
   // Detect CI/CD
   detectCICD(rootDir, scan, analysis);
@@ -109,7 +109,7 @@ export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalys
   detectTestFramework(rootDir, scan, analysis);
 
   // Resolve display name — human-readable name extracted from frontend/source
-  resolveDisplayName(rootDir, scan, analysis);
+  await resolveDisplayName(rootDir, scan, analysis);
 
   return analysis;
 }
@@ -222,25 +222,25 @@ function detectNodeProject(rootDir: string, scan: ScanResult, analysis: ProjectA
   }
 }
 
-function detectPythonProject(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
-  const hasPyproject = existsSync(join(rootDir, 'pyproject.toml'));
-  const hasSetupPy = existsSync(join(rootDir, 'setup.py'));
+async function detectPythonProject(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): Promise<void> {
+  const hasPyproject    = existsSync(join(rootDir, 'pyproject.toml'));
+  const hasSetupPy      = existsSync(join(rootDir, 'setup.py'));
   const hasRequirements = existsSync(join(rootDir, 'requirements.txt'));
-  const hasPipfile = existsSync(join(rootDir, 'Pipfile'));
-  const hasPoetry = existsSync(join(rootDir, 'poetry.lock'));
+  const hasPipfile      = existsSync(join(rootDir, 'Pipfile'));
+  const hasPoetry       = existsSync(join(rootDir, 'poetry.lock'));
+  const hasPyFiles      = scan.files.some(f => f.extension === '.py');
 
-  if (!hasPyproject && !hasSetupPy && !hasRequirements && !hasPipfile) return;
+  if (!hasPyproject && !hasSetupPy && !hasRequirements && !hasPipfile && !hasPyFiles) return;
 
-  if (hasPoetry) analysis.packageManager = 'poetry';
-  else if (hasPipfile) analysis.packageManager = 'pipenv';
-  else if (hasPyproject) analysis.packageManager = 'pip (pyproject.toml)';
-  else analysis.packageManager = 'pip';
-
-  // Read requirements to detect frameworks
-  let deps = '';
-  if (hasRequirements) {
-    deps = readFileContent(join(rootDir, 'requirements.txt')) || '';
+  if (hasPyproject || hasSetupPy || hasRequirements || hasPipfile) {
+    if (hasPoetry)         analysis.packageManager = 'poetry';
+    else if (hasPipfile)   analysis.packageManager = 'pipenv';
+    else if (hasPyproject) analysis.packageManager = 'pip (pyproject.toml)';
+    else                   analysis.packageManager = 'pip';
   }
+
+  let deps = '';
+  if (hasRequirements) deps = readFileContent(join(rootDir, 'requirements.txt')) || '';
 
   const pyFrameworks: Record<string, string> = {
     'django': 'Django', 'flask': 'Flask', 'fastapi': 'FastAPI',
@@ -250,19 +250,40 @@ function detectPythonProject(rootDir: string, scan: ScanResult, analysis: Projec
   };
 
   for (const [dep, framework] of Object.entries(pyFrameworks)) {
-    if (deps.toLowerCase().includes(dep)) {
-      analysis.frameworks.push(framework);
-    }
+    if (deps.toLowerCase().includes(dep)) analysis.frameworks.push(framework);
   }
 
-  // Check for manage.py (Django)
-  if (findFile(scan, 'manage.py')) {
-    if (!analysis.frameworks.includes('Django')) {
-      analysis.frameworks.push('Django');
+  if (findFile(scan, 'manage.py') && !analysis.frameworks.includes('Django')) {
+    analysis.frameworks.push('Django');
+  }
+
+  const libMap: Record<string, string> = {
+    'pandas': 'Pandas', 'numpy': 'NumPy', 'plotly': 'Plotly',
+    'reportlab': 'ReportLab', 'openpyxl': 'openpyxl', 'PIL': 'Pillow',
+    'sqlalchemy': 'SQLAlchemy', 'pymongo': 'PyMongo', 'redis': 'Redis',
+  };
+
+  const { readFileSync } = await import('fs');
+  const pySourceFiles = scan.files.filter(f => f.extension === '.py').slice(0, 10);
+  for (const file of pySourceFiles) {
+    let content: string;
+    try {
+      content = readFileSync(file.path, 'latin1').slice(0, 5000);
+    } catch { continue; }
+    for (const [dep, framework] of Object.entries(pyFrameworks)) {
+      if ((content.includes(`import ${dep}`) || content.includes(`from ${dep}`)) &&
+          !analysis.frameworks.includes(framework)) {
+        analysis.frameworks.push(framework);
+      }
+    }
+    for (const [dep, lib] of Object.entries(libMap)) {
+      if ((content.includes(`import ${dep}`) || content.includes(`from ${dep}`)) &&
+          !analysis.libraries.includes(lib)) {
+        analysis.libraries.push(lib);
+      }
     }
   }
 }
-
 function detectRustProject(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
   const cargoPath = join(rootDir, 'Cargo.toml');
   if (!existsSync(cargoPath)) return;
@@ -506,7 +527,7 @@ function detectTestFramework(rootDir: string, scan: ScanResult, analysis: Projec
  * - Page and component counts
  * - Concrete features (auth, file upload, payment, etc.)
  */
-function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
+async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): Promise<void> {
   const sourceExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.cs', '.java', '.kt'];
   const sourceFiles = scan.files
     .filter(f => sourceExts.includes(f.extension))
@@ -563,8 +584,14 @@ function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: ProjectAn
   ];
 
   for (const file of sourceFiles) {
-    const content = readFileContent(file.path, 30000);
-    if (!content) continue;
+    // Try UTF-8 first, then latin-1 fallback for files with emoji/special chars
+    let content = readFileContent(file.path, 30000);
+    if (!content) {
+      try {
+        const { readFileSync } = await import('fs');
+        content = readFileSync(file.path, 'latin1').slice(0, 30000);
+      } catch { continue; }
+    }
 
     // Feature detection
     for (const { pattern, feature } of featurePatterns) {
@@ -600,7 +627,7 @@ function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: ProjectAn
  * 5. Streamlit st.title / st.set_page_config
  * 6. Falls back to prettifying the folder/package name
  */
-function resolveDisplayName(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
+async function resolveDisplayName(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): Promise<void> {
   // 1. package.json displayName field
   const pkgPath = join(rootDir, 'package.json');
   if (existsSync(pkgPath)) {
@@ -633,12 +660,19 @@ function resolveDisplayName(rootDir: string, scan: ScanResult, analysis: Project
   // 3. Streamlit st.title() or st.set_page_config(page_title=...)
   const pyFiles = scan.files.filter(f => f.extension === '.py').slice(0, 15);
   for (const file of pyFiles) {
-    const content = readFileContent(file.path, 10000) || '';
-    const titleMatch =
-      content.match(/st\.title\s*\(\s*["']([^"']+)["']/i) ||
-      content.match(/page_title\s*=\s*["']([^"']+)["']/i);
-    if (titleMatch) {
-      analysis.displayName = titleMatch[1].trim();
+    // Use latin1 to handle files with emoji/special chars that break UTF-8
+    let content = '';
+    try {
+      const { readFileSync } = await import('fs');
+      content = readFileSync(file.path, 'latin1').slice(0, 10000);
+    } catch {
+      content = readFileContent(file.path, 10000) || '';
+    }
+    const pageConfigMatch = content.match(/page_title\s*=\s*["']([^"']+)["']/i);
+    const stTitleMatch = content.match(/st\.title\s*\(\s*["']([^"']+)["']/i);
+    const match = pageConfigMatch || stTitleMatch;
+    if (match) {
+      analysis.displayName = match[1].trim();
       return;
     }
   }

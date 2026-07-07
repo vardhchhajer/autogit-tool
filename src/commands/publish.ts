@@ -13,7 +13,7 @@ export async function cmdPublish(opts: { yes?: boolean; private?: boolean }): Pr
   logger.header('Publish to GitHub');
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   const status = await getGitStatus(rootDir);
 
   if (!status.isRepo) {

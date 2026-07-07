@@ -21,7 +21,7 @@ export async function cmdGithub(opts: { create?: boolean; private?: boolean }): 
   logger.info(`Authenticated as: ${chalk.bold(user.login)}`);
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
 
   const exists = await repoExists(user.login, analysis.name);
 

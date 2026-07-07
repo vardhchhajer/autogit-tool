@@ -10,7 +10,7 @@ export async function cmdDocs(opts: { ai?: boolean; regenerate?: boolean }): Pro
   logger.header('Generate Documentation');
 
   const scan = scanProject(rootDir);
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   const useAI = opts.ai !== false;
 
   const docs = await generateDocs(rootDir, analysis, scan, useAI, opts.regenerate);

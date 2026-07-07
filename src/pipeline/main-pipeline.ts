@@ -45,7 +45,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
 
   // Step 2: Analyze project
   const analyzeSpin = spinner('Analyzing project...').start();
-  const analysis = analyzeProject(rootDir, scan);
+  const analysis = await analyzeProject(rootDir, scan);
   analyzeSpin.succeed(formatAnalysisSummary(analysis));
 
   logger.blank();

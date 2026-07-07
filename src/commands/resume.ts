@@ -62,7 +62,7 @@ export async function runResumeUpdate(
 
   // Analyse the current project
   const scan    = scanProject(projectDir);
-  const analysis = analyzeProject(projectDir, scan);
+  const analysis = await analyzeProject(projectDir, scan);
 
   logger.header('Resume Update');
   logger.info(`Project: ${chalk.bold(analysis.name)}`);
