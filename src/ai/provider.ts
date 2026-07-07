@@ -401,7 +401,6 @@ class AzureOpenAIProvider implements AIProvider {
 }
 
 // ─── NVIDIA NIM ──────────────────────────────────────────────────────────────
-// NVIDIA NIM uses an OpenAI-compatible API hosted at integrate.api.nvidia.com
 
 class NvidiaProvider implements AIProvider {
   name = 'nvidia';
@@ -409,14 +408,16 @@ class NvidiaProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    // Default to the most capable free model on NVIDIA NIM
     const model = cfg.model || 'meta/llama-3.3-70b-instruct';
+    // NVIDIA NIM cold starts can take 90-120s on free tier — use a longer timeout
     const content = await openAICompatPost(
       'https://integrate.api.nvidia.com/v1/chat/completions',
       cfg.nvidiaKey!,
       model,
       messages,
-      options
+      options,
+      {},
+      120_000  // 2 minutes
     );
     return { content, provider: 'nvidia', model };
   }
