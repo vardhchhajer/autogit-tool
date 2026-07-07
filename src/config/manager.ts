@@ -1,7 +1,30 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { getConfigDir, getConfigPath } from '../utils/platform.js';
 
-// Avoid circular import — we call this lazily after github token changes
+// ─── Load ~/.autogit/.env on startup ─────────────────────────────────────────
+// Keys stored here OVERRIDE system environment variables so a stale
+// GROQ_API_KEY / GITHUB_TOKEN set in Windows never beats the saved config.
+function loadAutogitDotEnv(): void {
+  const envPath = join(getConfigDir(), '.env');
+  if (!existsSync(envPath)) return;
+  try {
+    const lines = readFileSync(envPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (key && val) process.env[key] = val;
+    }
+  } catch { /* non-fatal */ }
+}
+
+loadAutogitDotEnv();
+
+// ─── Octokit cache reset (avoid circular import) ──────────────────────────────
 let _resetOctokit: (() => void) | null = null;
 export function registerOctokitReset(fn: () => void): void {
   _resetOctokit = fn;
@@ -102,8 +125,50 @@ export function saveConfig(config: AutoGitConfig): void {
   }
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), 'utf-8');
   cachedConfig = config;
+  // Write ~/.autogit/.env so API keys override any stale system env vars
+  writeDotEnv(config);
   // Reset Octokit if the GitHub token changed
   _resetOctokit?.();
+}
+
+/** Writes all saved API keys to ~/.autogit/.env
+ *  This file is loaded at startup and overrides system environment variables,
+ *  preventing stale Windows env vars (GROQ_API_KEY etc.) from breaking things. */
+function writeDotEnv(config: AutoGitConfig): void {
+  const envPath = join(getConfigDir(), '.env');
+  const ai = config.ai ?? {};
+  const lines: string[] = [
+    '# AutoGit API keys — auto-generated, do not edit manually',
+    '# This file overrides system environment variables on every autogit run',
+    '',
+  ];
+
+  const keyMap: Array<[string, string | undefined]> = [
+    ['OPENAI_API_KEY',        ai.openaiKey],
+    ['ANTHROPIC_API_KEY',     ai.anthropicKey],
+    ['GEMINI_API_KEY',        ai.geminiKey],
+    ['OLLAMA_ENDPOINT',       ai.ollamaEndpoint],
+    ['OPENROUTER_API_KEY',    ai.openrouterKey],
+    ['MISTRAL_API_KEY',       ai.mistralKey],
+    ['GROQ_API_KEY',          ai.groqKey],
+    ['DEEPSEEK_API_KEY',      ai.deepseekKey],
+    ['PERPLEXITY_API_KEY',    ai.perplexityKey],
+    ['TOGETHER_API_KEY',      ai.togetherKey],
+    ['COHERE_API_KEY',        ai.cohereKey],
+    ['XAI_API_KEY',           ai.xaiKey],
+    ['AZURE_OPENAI_KEY',      ai.azureOpenAIKey],
+    ['NVIDIA_API_KEY',        ai.nvidiaKey],
+    ['CUSTOM_API_KEY',        ai.customKey],
+    ['CUSTOM_API_ENDPOINT',   ai.customEndpoint],
+    ['CUSTOM_MODEL_NAME',     ai.customModelName],
+    ['GITHUB_TOKEN',          config.github?.token],
+  ];
+
+  for (const [name, val] of keyMap) {
+    if (val) lines.push(`${name}=${val}`);
+  }
+
+  writeFileSync(envPath, lines.join('\n') + '\n', 'utf-8');
 }
 
 export function getConfigValue<K extends keyof AutoGitConfig>(
