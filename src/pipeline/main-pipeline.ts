@@ -97,11 +97,17 @@ function formatAnalysisSummary(analysis: ProjectAnalysis): string {
 }
 
 function displayProjectInfo(analysis: ProjectAnalysis): void {
-  logger.info(`Project: ${chalk.bold(analysis.name)}`);
+  logger.info(`Project: ${chalk.bold(analysis.displayName || analysis.name)}`);
+  if (analysis.displayName && analysis.displayName !== analysis.name) {
+    logger.dimmed(`  (package: ${analysis.name})`);
+  }
   if (analysis.languages.length) logger.info(`Languages: ${analysis.languages.join(', ')}`);
   if (analysis.frameworks.length) logger.info(`Frameworks: ${analysis.frameworks.join(', ')}`);
   if (analysis.packageManager) logger.info(`Package Manager: ${analysis.packageManager}`);
   if (analysis.architecture !== 'unknown') logger.info(`Architecture: ${analysis.architecture}`);
+  if (analysis.codeFeatures.length > 0) {
+    logger.info(`Features: ${analysis.codeFeatures.slice(0, 5).join(', ')}`);
+  }
 }
 
 async function handleReadme(
@@ -268,7 +274,26 @@ async function handleGitHub(
     let repoHtmlUrl = `https://github.com/${user.login}/${repoName}`;
 
     if (!exists) {
-      const isPrivate = options.private ?? !(options.public ?? false);
+      // Ask about visibility if not already specified via flags
+      let isPrivate: boolean;
+      if (options.private !== undefined || options.public !== undefined) {
+        isPrivate = options.private ?? !(options.public ?? false);
+      } else if (options.yes) {
+        isPrivate = false; // default to public when --yes
+      } else {
+        logger.blank();
+        const { visibility } = await inquirer.prompt<{ visibility: string }>([{
+          type: 'list',
+          name: 'visibility',
+          message: `Repository visibility for "${repoName}":`,
+          choices: [
+            { name: 'Public  (anyone can see it)', value: 'public' },
+            { name: 'Private (only you can see it)', value: 'private' },
+          ],
+          default: 'public',
+        }]);
+        isPrivate = visibility === 'private';
+      }
 
       if (!options.yes) {
         logger.blank();

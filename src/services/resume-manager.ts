@@ -206,40 +206,57 @@ function compileWithNodeLatex(latex: any, source: string, texPath: string): Prom
 
 function buildResumePrompt(analysis: ProjectAnalysis, ownerName: string): string {
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries].join(', ');
-  const features = analysis.features.length > 0 ? analysis.features.slice(0, 5).join('; ') : 'Core functionality implemented';
+  const displayName = analysis.displayName || analysis.name;
+
+  const featureList = [...new Set([...analysis.codeFeatures, ...analysis.features])]
+    .slice(0, 8)
+    .join(', ') || 'Core functionality';
+
+  const routesSummary = analysis.apiRoutes.length > 0
+    ? `API routes: ${analysis.apiRoutes.slice(0, 8).join(', ')}`
+    : '';
+
+  const scale = [
+    analysis.pageCount > 0 ? `${analysis.pageCount} pages/screens` : '',
+    analysis.componentCount > 0 ? `${analysis.componentCount} components` : '',
+  ].filter(Boolean).join(', ');
 
   return `Generate a LaTeX resume project entry for ${ownerName}'s technical resume.
 
 PROJECT DETAILS:
-- Name: ${analysis.name}
+- Display Name: ${displayName}
+- Package/Folder Name: ${analysis.name}
+- Description: ${analysis.description || 'A software project'}
 - Tech Stack: ${techStack}
 - Architecture: ${analysis.architecture}
-- Description: ${analysis.description || 'A software project'}
-- Key Features: ${features}
+- Features detected from source code: ${featureList}
+${routesSummary ? `- ${routesSummary}` : ''}
+${scale ? `- Scale: ${scale}` : ''}
 ${analysis.database.length > 0 ? `- Database: ${analysis.database.join(', ')}` : ''}
 ${analysis.deployment.length > 0 ? `- Deployment: ${analysis.deployment.join(', ')}` : ''}
+${analysis.cicd.length > 0 ? `- CI/CD: ${analysis.cicd.join(', ')}` : ''}
 
 INSTRUCTIONS:
-1. Use this LaTeX structure:
+1. Use EXACTLY this LaTeX structure:
    \\resumeProjectHeading
-       {\\textbf{Project Name} $|$ \\emph{Category/Type}}{}
+       {\\textbf{${displayName}} $|$ \\emph{Category/Type}}{}
        \\resumeItemListStart
-         \\resumeItem{Bullet point 1}
-         \\resumeItem{Bullet point 2}
-         \\resumeItem{Bullet point 3}
-         \\resumeItem{\\textbf{Tech Stack:} technologies used}
+         \\resumeItem{Bullet 1}
+         \\resumeItem{Bullet 2}
+         \\resumeItem{Bullet 3}
+         \\resumeItem{\\textbf{Tech Stack:} technologies}
        \\resumeItemListEnd
 
-2. Write 3-4 bullet points using strong action verbs (Built, Developed, Engineered, Implemented, Designed).
-3. Focus on: what was built, technical depth, impact/scale, architectural decisions.
-4. Last bullet should be: \\textbf{Tech Stack:} [list all technologies]
-5. Keep bullets concise but technical (1-2 lines each).
-6. Do NOT add extra commentary or explanations — return ONLY the LaTeX code.
-
-Generate the entry now:`;
+2. Use "${displayName}" as the project name in \\textbf{} — NOT the package name "${analysis.name}".
+3. Write 3-5 bullet points using strong action verbs (Built, Developed, Engineered, Implemented, Designed).
+4. Reference the actual features found in the code — be specific (e.g. mention barcode scanning, PDF export, etc.).
+5. Include scale details (pages, components, routes) if meaningful.
+6. Last bullet MUST be: \\textbf{Tech Stack:} [full list]
+7. Return ONLY the LaTeX block — no explanation, no markdown fences.`;
 }
 
 function generateTemplateEntry(analysis: ProjectAnalysis): string {
+  const displayName = analysis.displayName || analysis.name;
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries]
     .slice(0, 10)
     .join(', ');
@@ -252,15 +269,17 @@ function generateTemplateEntry(analysis: ProjectAnalysis): string {
 
   const bullets: string[] = [];
 
-  // Bullet 1: What was built
+  // Bullet 1: what was built using display name
   if (analysis.description) {
-    bullets.push(`Built ${analysis.name} — ${analysis.description.toLowerCase()}.`);
+    bullets.push(`Built ${displayName} — ${analysis.description.toLowerCase()}.`);
   } else {
-    bullets.push(`Developed ${analysis.name}, a ${analysis.architecture.toLowerCase()} application.`);
+    bullets.push(`Developed ${displayName}, a ${analysis.architecture.toLowerCase()} application.`);
   }
 
-  // Bullet 2: Technical detail (architecture or key feature)
-  if (analysis.features.length > 0) {
+  // Bullet 2: specific code features if available
+  if (analysis.codeFeatures.length > 0) {
+    bullets.push(`Implemented ${analysis.codeFeatures.slice(0, 3).join(', ').toLowerCase()}.`);
+  } else if (analysis.features.length > 0) {
     bullets.push(`Implemented ${analysis.features[0].toLowerCase()}.`);
   } else if (analysis.database.length > 0) {
     bullets.push(`Designed system architecture with ${analysis.database[0]} database integration.`);
@@ -268,13 +287,21 @@ function generateTemplateEntry(analysis: ProjectAnalysis): string {
     bullets.push(`Engineered modular ${analysis.architecture.toLowerCase()} with focus on maintainability.`);
   }
 
-  // Bullet 3: Tech stack
+  // Bullet 3: scale if meaningful
+  if (analysis.pageCount > 0 || analysis.componentCount > 0) {
+    const parts = [];
+    if (analysis.pageCount > 0) parts.push(`${analysis.pageCount} pages`);
+    if (analysis.componentCount > 0) parts.push(`${analysis.componentCount} components`);
+    bullets.push(`Built ${parts.join(' and ')} with full routing and state management.`);
+  }
+
+  // Tech stack bullet
   bullets.push(`\\textbf{Tech Stack:} ${techStack}.`);
 
   const bulletItems = bullets.map(b => `        \\resumeItem{${b}}`).join('\n');
 
   return `      \\resumeProjectHeading
-          {\\textbf{${analysis.name}} $|$ \\emph{${projectType}}}{}
+          {\\textbf{${displayName}} $|$ \\emph{${projectType}}}{}
           \\resumeItemListStart
 ${bulletItems}
           \\resumeItemListEnd`;

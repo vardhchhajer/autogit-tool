@@ -4,6 +4,7 @@ import { type ScanResult, type FileEntry, readFileContent, findFile } from './fi
 
 export interface ProjectAnalysis {
   name: string;
+  displayName: string;        // Human-readable name from frontend (e.g. "HealthBridge")
   languages: string[];
   frameworks: string[];
   libraries: string[];
@@ -12,9 +13,11 @@ export interface ProjectAnalysis {
   testFramework: string | null;
   entryPoints: string[];
   features: string[];
+  codeFeatures: string[];     // Features extracted from actual source code
   architecture: string;
   database: string[];
   apis: string[];
+  apiRoutes: string[];        // Actual route paths found in source
   envVars: string[];
   deployment: string[];
   license: string | null;
@@ -24,11 +27,14 @@ export interface ProjectAnalysis {
   readmePath: string | null;
   description: string | null;
   version: string | null;
+  pageCount: number;          // Number of pages/screens detected
+  componentCount: number;     // Number of UI components detected
 }
 
 export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalysis {
   const analysis: ProjectAnalysis = {
     name: basename(rootDir),
+    displayName: '',
     languages: [],
     frameworks: [],
     libraries: [],
@@ -37,9 +43,11 @@ export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalys
     testFramework: null,
     entryPoints: [],
     features: [],
+    codeFeatures: [],
     architecture: 'unknown',
     database: [],
     apis: [],
+    apiRoutes: [],
     envVars: [],
     deployment: [],
     license: null,
@@ -49,6 +57,8 @@ export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalys
     readmePath: null,
     description: null,
     version: null,
+    pageCount: 0,
+    componentCount: 0,
   };
 
   // Detect README
@@ -70,6 +80,9 @@ export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalys
   detectGoProject(rootDir, scan, analysis);
   detectJavaProject(rootDir, scan, analysis);
   detectDotNetProject(rootDir, scan, analysis);
+
+  // Deep code analysis — reads actual source files
+  deepCodeAnalysis(rootDir, scan, analysis);
 
   // Detect CI/CD
   detectCICD(rootDir, scan, analysis);
@@ -94,6 +107,9 @@ export function analyzeProject(rootDir: string, scan: ScanResult): ProjectAnalys
 
   // Detect test framework
   detectTestFramework(rootDir, scan, analysis);
+
+  // Resolve display name — human-readable name extracted from frontend/source
+  resolveDisplayName(rootDir, scan, analysis);
 
   return analysis;
 }
@@ -480,4 +496,185 @@ function detectTestFramework(rootDir: string, scan: ScanResult, analysis: Projec
   } else if (testFiles.length > 0) {
     analysis.testFramework = 'Unknown';
   }
+}
+
+// ─── Deep code analysis ───────────────────────────────────────────────────────
+
+/**
+ * Read actual source files to extract:
+ * - Routes / API endpoints
+ * - Page and component counts
+ * - Concrete features (auth, file upload, payment, etc.)
+ */
+function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
+  const sourceExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.cs', '.java', '.kt'];
+  const sourceFiles = scan.files
+    .filter(f => sourceExts.includes(f.extension))
+    .slice(0, 60); // cap to keep things fast
+
+  // Count pages and components
+  const pageFiles = scan.files.filter(f =>
+    f.relativePath.match(/\/(pages|app|views|screens)\/.*\.(tsx?|jsx?|py|vue|svelte)$/i)
+  );
+  const componentFiles = scan.files.filter(f =>
+    f.relativePath.match(/\/components?\/.*\.(tsx?|jsx?|vue|svelte)$/i)
+  );
+  analysis.pageCount = pageFiles.length;
+  analysis.componentCount = componentFiles.length;
+
+  // Feature detection patterns — search across source files
+  const featurePatterns: Array<{ pattern: RegExp; feature: string }> = [
+    { pattern: /auth|login|signin|signup|jwt|oauth|passport/i,    feature: 'Authentication' },
+    { pattern: /upload|multer|formdata|file.*upload/i,             feature: 'File Upload' },
+    { pattern: /stripe|payment|checkout|billing/i,                 feature: 'Payment Integration' },
+    { pattern: /socket\.io|websocket|ws\s*=|realtime/i,            feature: 'Real-time (WebSocket)' },
+    { pattern: /email|nodemailer|sendgrid|mailgun|smtp/i,          feature: 'Email Notifications' },
+    { pattern: /notification|push.*notif|fcm|apns/i,               feature: 'Push Notifications' },
+    { pattern: /chart|graph|d3\.|recharts|plotly/i,                feature: 'Data Visualization' },
+    { pattern: /pdf|puppeteer|reportlab|fpdf/i,                    feature: 'PDF Generation' },
+    { pattern: /cron|schedule|celery|bull|agenda/i,                feature: 'Background Jobs' },
+    { pattern: /cache|redis\.set|memcache/i,                       feature: 'Caching' },
+    { pattern: /search|elasticsearch|algolia|whoosh/i,             feature: 'Search' },
+    { pattern: /map|leaflet|mapbox|google.*maps/i,                 feature: 'Maps Integration' },
+    { pattern: /ai|openai|anthropic|gemini|llm|langchain/i,        feature: 'AI Integration' },
+    { pattern: /barcode|qrcode|scanner/i,                          feature: 'Barcode/QR Scanner' },
+    { pattern: /dashboard|analytics|metric/i,                      feature: 'Analytics Dashboard' },
+    { pattern: /crud|create.*read.*update.*delete/i,               feature: 'CRUD Operations' },
+    { pattern: /export|csv|xlsx|excel/i,                           feature: 'Data Export' },
+    { pattern: /import|migration|seed/i,                           feature: 'Data Import/Migration' },
+    { pattern: /role|permission|rbac|acl/i,                        feature: 'Role-based Access Control' },
+    { pattern: /encrypt|decrypt|crypto|aes|rsa/i,                  feature: 'Encryption' },
+    { pattern: /sms|twilio|vonage/i,                               feature: 'SMS Integration' },
+    { pattern: /speech|whisper|tts|stt/i,                          feature: 'Speech Processing' },
+    { pattern: /blockchain|solana|ethereum|web3/i,                  feature: 'Blockchain' },
+    { pattern: /docker|container|kubernetes/i,                      feature: 'Containerization' },
+    { pattern: /thermal.*print|tspl|zpl|label.*print/i,            feature: 'Label Printing' },
+  ];
+
+  const foundFeatures = new Set<string>();
+  const routes: string[] = [];
+
+  // Route extraction patterns
+  const routePatterns = [
+    /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"`](\/[^'"` ]*)/gi,
+    /@(?:Get|Post|Put|Delete|Patch)\s*\(\s*['"`](\/[^'"` ]*)/gi,
+    /path\s*=\s*['"`](\/[^'"` ]+)/gi,
+    /url_prefix\s*=\s*['"`](\/[^'"` ]+)/gi,
+  ];
+
+  for (const file of sourceFiles) {
+    const content = readFileContent(file.path, 30000);
+    if (!content) continue;
+
+    // Feature detection
+    for (const { pattern, feature } of featurePatterns) {
+      if (pattern.test(content)) foundFeatures.add(feature);
+    }
+
+    // Route extraction
+    for (const routePattern of routePatterns) {
+      const matches = [...content.matchAll(routePattern)];
+      for (const match of matches.slice(0, 5)) {
+        const route = match[2] || match[1];
+        if (route && route.length > 1 && !routes.includes(route)) {
+          routes.push(route);
+        }
+      }
+    }
+  }
+
+  analysis.codeFeatures = [...foundFeatures];
+  analysis.apiRoutes = routes.slice(0, 20);
+
+  // Merge code features into main features list (deduplicated)
+  const allFeatures = new Set([...analysis.features, ...analysis.codeFeatures]);
+  analysis.features = [...allFeatures];
+}
+
+/**
+ * Extract a human-readable display name from:
+ * 1. HTML <title> tag in index.html / public/index.html
+ * 2. App component title (document.title, st.title, etc.)
+ * 3. README first heading
+ * 4. package.json "displayName" field
+ * 5. Streamlit st.title / st.set_page_config
+ * 6. Falls back to prettifying the folder/package name
+ */
+function resolveDisplayName(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): void {
+  // 1. package.json displayName field
+  const pkgPath = join(rootDir, 'package.json');
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      if (pkg.displayName) {
+        analysis.displayName = pkg.displayName;
+        return;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. HTML <title> in index.html variants
+  const htmlFiles = scan.files.filter(f =>
+    f.name === 'index.html' || f.relativePath.includes('public/index.html')
+  );
+  for (const file of htmlFiles) {
+    const content = readFileContent(file.path, 5000) || '';
+    const titleMatch = content.match(/<title>([^<]+)<\/title>/i);
+    if (titleMatch) {
+      const title = titleMatch[1].trim();
+      // Skip generic titles
+      if (title && !title.match(/^(react app|vite app|my app|app|index|untitled)$/i)) {
+        analysis.displayName = title;
+        return;
+      }
+    }
+  }
+
+  // 3. Streamlit st.title() or st.set_page_config(page_title=...)
+  const pyFiles = scan.files.filter(f => f.extension === '.py').slice(0, 15);
+  for (const file of pyFiles) {
+    const content = readFileContent(file.path, 10000) || '';
+    const titleMatch =
+      content.match(/st\.title\s*\(\s*["']([^"']+)["']/i) ||
+      content.match(/page_title\s*=\s*["']([^"']+)["']/i);
+    if (titleMatch) {
+      analysis.displayName = titleMatch[1].trim();
+      return;
+    }
+  }
+
+  // 4. document.title = "..." in JS/TS files
+  const jsFiles = scan.files
+    .filter(f => ['.ts', '.tsx', '.js', '.jsx'].includes(f.extension))
+    .slice(0, 20);
+  for (const file of jsFiles) {
+    const content = readFileContent(file.path, 10000) || '';
+    const titleMatch = content.match(/document\.title\s*=\s*["']([^"']+)["']/i);
+    if (titleMatch) {
+      analysis.displayName = titleMatch[1].trim();
+      return;
+    }
+  }
+
+  // 5. README first H1
+  if (analysis.readmePath) {
+    const readme = readFileContent(analysis.readmePath, 3000) || '';
+    const h1Match = readme.match(/^#\s+(.+)$/m);
+    if (h1Match) {
+      const title = h1Match[1].trim().replace(/[*_`]/g, '');
+      if (title && !title.match(/^(readme|documentation|project)$/i)) {
+        analysis.displayName = title;
+        return;
+      }
+    }
+  }
+
+  // 6. Prettify the package/folder name as last resort
+  // e.g. "my-cool-app" → "My Cool App", "healthbridge" → "Healthbridge"
+  const raw = analysis.name || basename(rootDir);
+  analysis.displayName = raw
+    .replace(/[-_]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase → words
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .trim();
 }
