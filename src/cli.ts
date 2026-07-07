@@ -16,8 +16,12 @@ import { cmdDoctor } from './commands/doctor.js';
 import { cmdConfig } from './commands/config.js';
 import { cmdLogin } from './commands/login.js';
 import { cmdResume } from './commands/resume.js';
+import { createRequire } from 'module';
 import { registerOctokitReset } from './config/manager.js';
 import { resetOctokitCache } from './services/github-service.js';
+
+const _require = createRequire(import.meta.url);
+const pkg = _require('../package.json') as { version: string };
 
 // Wire Octokit cache reset whenever config is saved
 registerOctokitReset(resetOctokitCache);
@@ -26,7 +30,7 @@ const program = new Command();
 
 program
   .name('autogit')
-  .version('1.0.0')
+  .version(pkg.version)
   .description('Automate project documentation, GitHub publishing, and social media content generation')
   .option('--yes', 'Skip all confirmation prompts')
   .option('--dry-run', 'Preview changes without applying them')
