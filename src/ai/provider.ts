@@ -368,22 +368,101 @@ class AzureOpenAIProvider implements AIProvider {
   }
 }
 
+// ─── NVIDIA NIM ──────────────────────────────────────────────────────────────
+// NVIDIA NIM uses an OpenAI-compatible API hosted at integrate.api.nvidia.com
+
+class NvidiaProvider implements AIProvider {
+  name = 'nvidia';
+  isConfigured() { return !!getAIConfig().nvidiaKey; }
+
+  async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
+    const cfg = getAIConfig();
+    // Default to the most capable free model on NVIDIA NIM
+    const model = cfg.model || 'meta/llama-3.3-70b-instruct';
+    const content = await openAICompatPost(
+      'https://integrate.api.nvidia.com/v1/chat/completions',
+      cfg.nvidiaKey!,
+      model,
+      messages,
+      options
+    );
+    return { content, provider: 'nvidia', model };
+  }
+}
+
+// ─── Custom OpenAI-compatible endpoint ───────────────────────────────────────
+// Works with any server that speaks the OpenAI chat completions format:
+// LM Studio, Jan, LocalAI, vLLM, llama.cpp server, text-generation-webui, etc.
+
+class CustomProvider implements AIProvider {
+  name = 'custom';
+
+  isConfigured() {
+    const cfg = getAIConfig();
+    return !!(cfg.customEndpoint);  // endpoint is the only required field
+  }
+
+  async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
+    const cfg = getAIConfig();
+    const endpoint = cfg.customEndpoint!.replace(/\/$/, '');
+    const model = cfg.customModelName || cfg.model || 'default';
+
+    // Build URL — support both bare base URL and full path
+    const url = endpoint.endsWith('/chat/completions')
+      ? endpoint
+      : `${endpoint}/chat/completions`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // API key is optional for local servers
+    if (cfg.customKey) {
+      headers['Authorization'] = `Bearer ${cfg.customKey}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.maxTokens ?? 4096,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Custom API HTTP ${response.status}: ${err}`);
+    }
+
+    const data = (await response.json()) as any;
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Custom API returned empty response');
+
+    return { content, provider: 'custom', model };
+  }
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 const providers: Record<string, AIProvider> = {
-  openai:       new OpenAIProvider(),
-  anthropic:    new AnthropicProvider(),
-  gemini:       new GeminiProvider(),
-  ollama:       new OllamaProvider(),
-  openrouter:   new OpenRouterProvider(),
-  mistral:      new MistralProvider(),
-  groq:         new GroqProvider(),
-  deepseek:     new DeepSeekProvider(),
-  perplexity:   new PerplexityProvider(),
-  together:     new TogetherProvider(),
-  cohere:       new CohereProvider(),
-  xai:          new XAIProvider(),
+  openai:         new OpenAIProvider(),
+  anthropic:      new AnthropicProvider(),
+  gemini:         new GeminiProvider(),
+  ollama:         new OllamaProvider(),
+  openrouter:     new OpenRouterProvider(),
+  mistral:        new MistralProvider(),
+  groq:           new GroqProvider(),
+  deepseek:       new DeepSeekProvider(),
+  perplexity:     new PerplexityProvider(),
+  together:       new TogetherProvider(),
+  cohere:         new CohereProvider(),
+  xai:            new XAIProvider(),
   'azure-openai': new AzureOpenAIProvider(),
+  nvidia:         new NvidiaProvider(),
+  custom:         new CustomProvider(),
 };
 
 export function getProvider(name?: string): AIProvider {
@@ -420,6 +499,8 @@ export function listProviders(): { name: string; configured: boolean; defaultMod
     cohere:         'command-r-plus-08-2024',
     xai:            'grok-3-fast-beta',
     'azure-openai': '(your deployment name)',
+    nvidia:         'meta/llama-3.3-70b-instruct',
+    custom:         '(your model name)',
   };
 
   return Object.entries(providers).map(([name, p]) => ({

@@ -79,8 +79,10 @@ AutoGit supports 13 AI providers. Configure via `autogit config` or environment 
 | **OpenRouter** | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-4-20250514` | ✔ Free models |
 | **Ollama** | `OLLAMA_ENDPOINT` | `llama3.1` | ✔ Local |
 | **Azure OpenAI** | `AZURE_OPENAI_KEY` | your deployment | — |
+| **NVIDIA NIM** | `NVIDIA_API_KEY` | `meta/llama-3.3-70b-instruct` | ✔ Free credits |
+| **Custom** | `CUSTOM_API_KEY` | your model | — |
 
-**Recommended for free usage:** [Groq](https://console.groq.com) — fastest free API, no credit card required.
+**Recommended for free usage:** [Groq](https://console.groq.com) — fastest free API, no credit card required. [NVIDIA NIM](https://build.nvidia.com) also provides free credits on signup.
 
 ### Configure interactively
 

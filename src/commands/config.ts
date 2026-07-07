@@ -28,6 +28,8 @@ const NON_SECRET_KEYS = new Set<keyof NonNullable<AutoGitConfig['ai']>>([
   'azureOpenAIEndpoint',
   'azureOpenAIDeployment',
   'azureOpenAIApiVersion',
+  'customEndpoint',
+  'customModelName',
   'provider',
   'model',
 ]);
@@ -53,6 +55,14 @@ const PROVIDER_FIELDS: Record<
     { label: 'Azure endpoint (https://RESOURCE.openai.azure.com)', key: 'azureOpenAIEndpoint', hint: 'AZURE_OPENAI_ENDPOINT' },
     { label: 'Deployment name',                                 key: 'azureOpenAIDeployment', hint: 'AZURE_OPENAI_DEPLOYMENT' },
     { label: 'API version',                                     key: 'azureOpenAIApiVersion', hint: 'AZURE_OPENAI_API_VERSION' },
+  ],
+  nvidia: [
+    { label: 'NVIDIA NIM API Key (from build.nvidia.com)', key: 'nvidiaKey', hint: 'NVIDIA_API_KEY' },
+  ],
+  custom: [
+    { label: 'API endpoint  (e.g. http://localhost:1234/v1 or https://myapi.com/v1)', key: 'customEndpoint', hint: 'CUSTOM_API_ENDPOINT' },
+    { label: 'API key  (leave blank for local servers with no auth)',                  key: 'customKey',      hint: 'CUSTOM_API_KEY' },
+    { label: 'Model name  (sent in request body)',                                     key: 'customModelName',hint: 'CUSTOM_MODEL_NAME' },
   ],
 };
 
@@ -394,7 +404,9 @@ function debugConfig(): void {
     ['TOGETHER_API_KEY',    process.env['TOGETHER_API_KEY']],
     ['COHERE_API_KEY',      process.env['COHERE_API_KEY']],
     ['XAI_API_KEY',         process.env['XAI_API_KEY']],
-    ['AZURE_OPENAI_KEY',    process.env['AZURE_OPENAI_KEY']],
+    ['NVIDIA_API_KEY',    process.env['NVIDIA_API_KEY']],
+    ['CUSTOM_API_KEY',    process.env['CUSTOM_API_KEY']],
+    ['CUSTOM_API_ENDPOINT', process.env['CUSTOM_API_ENDPOINT']],
   ];
 
   const setEnvVars = envVars.filter(([, v]) => v);
@@ -431,6 +443,8 @@ function debugConfig(): void {
     ['cohereKey',      ai.cohereKey],
     ['xaiKey',         ai.xaiKey],
     ['azureOpenAIKey', ai.azureOpenAIKey],
+    ['nvidiaKey',      ai.nvidiaKey],
+    ['customKey',      ai.customKey],
   ];
 
   logger.header('Config file keys (~/.autogit/config.json)');
@@ -464,6 +478,8 @@ function debugConfig(): void {
     together:   process.env.TOGETHER_API_KEY     || ai.togetherKey,
     cohere:     process.env.COHERE_API_KEY       || ai.cohereKey,
     xai:        process.env.XAI_API_KEY          || ai.xaiKey,
+    nvidia:     process.env.NVIDIA_API_KEY       || ai.nvidiaKey,
+    custom:     process.env.CUSTOM_API_KEY       || ai.customKey,
   };
   const usedKey = activeKey[activeProvider];
   const usedPreview = usedKey

@@ -20,7 +20,9 @@ export type AIProviderName =
   | 'together'
   | 'cohere'
   | 'xai'
-  | 'azure-openai';
+  | 'azure-openai'
+  | 'nvidia'
+  | 'custom';
 
 export interface AutoGitConfig {
   github?: {
@@ -45,9 +47,15 @@ export interface AutoGitConfig {
     xaiKey?: string;
     // Azure OpenAI — needs extra fields
     azureOpenAIKey?: string;
-    azureOpenAIEndpoint?: string;   // e.g. https://MY-RESOURCE.openai.azure.com
-    azureOpenAIDeployment?: string; // deployment/model name in Azure
-    azureOpenAIApiVersion?: string; // e.g. 2024-02-01
+    azureOpenAIEndpoint?: string;
+    azureOpenAIDeployment?: string;
+    azureOpenAIApiVersion?: string;
+    // NVIDIA NIM
+    nvidiaKey?: string;
+    // Custom OpenAI-compatible endpoint
+    customKey?: string;
+    customEndpoint?: string;    // e.g. http://localhost:8080/v1
+    customModelName?: string;   // model to send in the request body
   };
   defaults?: {
     visibility?: 'public' | 'private';
@@ -151,5 +159,13 @@ export function getAIConfig() {
     azureOpenAIEndpoint:   process.env.AZURE_OPENAI_ENDPOINT   || ai.azureOpenAIEndpoint,
     azureOpenAIDeployment: process.env.AZURE_OPENAI_DEPLOYMENT || ai.azureOpenAIDeployment,
     azureOpenAIApiVersion: process.env.AZURE_OPENAI_API_VERSION|| ai.azureOpenAIApiVersion || '2024-02-01',
+
+    // NVIDIA NIM
+    nvidiaKey:      process.env.NVIDIA_API_KEY  || ai.nvidiaKey,
+
+    // Custom OpenAI-compatible endpoint
+    customKey:       process.env.CUSTOM_API_KEY      || ai.customKey,
+    customEndpoint:  process.env.CUSTOM_API_ENDPOINT || ai.customEndpoint,
+    customModelName: process.env.CUSTOM_MODEL_NAME   || ai.customModelName,
   };
 }
