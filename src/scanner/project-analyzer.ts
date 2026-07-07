@@ -111,6 +111,18 @@ export async function analyzeProject(rootDir: string, scan: ScanResult): Promise
   // Resolve display name — human-readable name extracted from frontend/source
   await resolveDisplayName(rootDir, scan, analysis);
 
+  // Post-process: libraries should not appear in frameworks list
+  const libOnlyNames = ['Pandas', 'NumPy', 'SciPy', 'Plotly'];
+  for (const lib of libOnlyNames) {
+    const idx = analysis.frameworks.indexOf(lib);
+    if (idx !== -1) {
+      analysis.frameworks.splice(idx, 1);
+      if (!analysis.libraries.includes(lib)) analysis.libraries.push(lib);
+    }
+  }
+  analysis.libraries = [...new Set(analysis.libraries)];
+  analysis.frameworks = [...new Set(analysis.frameworks)];
+
   return analysis;
 }
 
@@ -543,33 +555,33 @@ async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: Pro
   analysis.pageCount = pageFiles.length;
   analysis.componentCount = componentFiles.length;
 
-  // Feature detection patterns — search across source files
+  // Feature detection patterns — more precise to avoid false positives
   const featurePatterns: Array<{ pattern: RegExp; feature: string }> = [
-    { pattern: /auth|login|signin|signup|jwt|oauth|passport/i,    feature: 'Authentication' },
-    { pattern: /upload|multer|formdata|file.*upload/i,             feature: 'File Upload' },
-    { pattern: /stripe|payment|checkout|billing/i,                 feature: 'Payment Integration' },
-    { pattern: /socket\.io|websocket|ws\s*=|realtime/i,            feature: 'Real-time (WebSocket)' },
-    { pattern: /email|nodemailer|sendgrid|mailgun|smtp/i,          feature: 'Email Notifications' },
-    { pattern: /notification|push.*notif|fcm|apns/i,               feature: 'Push Notifications' },
-    { pattern: /chart|graph|d3\.|recharts|plotly/i,                feature: 'Data Visualization' },
-    { pattern: /pdf|puppeteer|reportlab|fpdf/i,                    feature: 'PDF Generation' },
-    { pattern: /cron|schedule|celery|bull|agenda/i,                feature: 'Background Jobs' },
-    { pattern: /cache|redis\.set|memcache/i,                       feature: 'Caching' },
-    { pattern: /search|elasticsearch|algolia|whoosh/i,             feature: 'Search' },
-    { pattern: /map|leaflet|mapbox|google.*maps/i,                 feature: 'Maps Integration' },
-    { pattern: /ai|openai|anthropic|gemini|llm|langchain/i,        feature: 'AI Integration' },
-    { pattern: /barcode|qrcode|scanner/i,                          feature: 'Barcode/QR Scanner' },
-    { pattern: /dashboard|analytics|metric/i,                      feature: 'Analytics Dashboard' },
-    { pattern: /crud|create.*read.*update.*delete/i,               feature: 'CRUD Operations' },
-    { pattern: /export|csv|xlsx|excel/i,                           feature: 'Data Export' },
-    { pattern: /import|migration|seed/i,                           feature: 'Data Import/Migration' },
-    { pattern: /role|permission|rbac|acl/i,                        feature: 'Role-based Access Control' },
-    { pattern: /encrypt|decrypt|crypto|aes|rsa/i,                  feature: 'Encryption' },
-    { pattern: /sms|twilio|vonage/i,                               feature: 'SMS Integration' },
-    { pattern: /speech|whisper|tts|stt/i,                          feature: 'Speech Processing' },
-    { pattern: /blockchain|solana|ethereum|web3/i,                  feature: 'Blockchain' },
-    { pattern: /docker|container|kubernetes/i,                      feature: 'Containerization' },
-    { pattern: /thermal.*print|tspl|zpl|label.*print/i,            feature: 'Label Printing' },
+    { pattern: /\b(?:auth|login|signin|signup)\b|jwt\.sign|passport\.use|oauth/i,           feature: 'Authentication' },
+    { pattern: /file_uploader|st\.file_uploader|multer|formdata|FileUpload|file.*upload/i,   feature: 'File Upload' },
+    { pattern: /stripe|payment|checkout|billing/i,                                            feature: 'Payment Integration' },
+    { pattern: /socket\.io|new WebSocket|websocket\.connect|\.on\(['"]message/i,              feature: 'Real-time (WebSocket)' },
+    { pattern: /nodemailer|sendgrid|mailgun|smtplib|smtp\.send/i,                             feature: 'Email Notifications' },
+    { pattern: /push_notification|fcm|apns|firebase.*message/i,                               feature: 'Push Notifications' },
+    { pattern: /plotly\.|recharts|d3\.select|Chart\.js|st\.plotly_chart|st\.bar_chart/i,      feature: 'Data Visualization' },
+    { pattern: /reportlab|pdfkit|puppeteer.*pdf|fpdf|SimpleDocTemplate/i,                     feature: 'PDF Generation' },
+    { pattern: /celery|bull\.Queue|agenda\.every|crontab|schedule\.every/i,                   feature: 'Background Jobs' },
+    { pattern: /redis\.set|memcache|\.cache\(|cache\.get/i,                                   feature: 'Caching' },
+    { pattern: /elasticsearch|algolia|whoosh\.index|solr/i,                                   feature: 'Search' },
+    { pattern: /leaflet\.|mapbox|google\.maps|folium\.Map/i,                                  feature: 'Maps Integration' },
+    { pattern: /openai\.|anthropic\.|gemini\.|langchain|LLM\(|ChatOpenAI/i,                   feature: 'AI Integration' },
+    { pattern: /barcode|qrcode|cv2\.QRCode|scanner\.decode/i,                                 feature: 'Barcode/QR Scanner' },
+    { pattern: /st\.metric|st\.dataframe.*dashboard|Plotly.*dashboard|analytics.*dashboard/i, feature: 'Analytics Dashboard' },
+    { pattern: /\.create\(|\.update\(|\.delete\(|\.findOne\(|session\.add|session\.delete/i,  feature: 'CRUD Operations' },
+    { pattern: /to_csv|\.to_excel|csv\.writer|st\.download_button.*csv/i,                     feature: 'Data Export' },
+    { pattern: /pd\.read_excel|pd\.read_csv|openpyxl\.load|xlrd\.open/i,                      feature: 'Data Import' },
+    { pattern: /\brole\b.*permission|rbac|acl\.|@roles_required/i,                            feature: 'Role-based Access Control' },
+    { pattern: /AES\.encrypt|RSA\.|Fernet\(|crypto\.createCipher/i,                           feature: 'Encryption' },
+    { pattern: /twilio\.|vonage\.|nexmo\.|sms\.send/i,                                        feature: 'SMS Integration' },
+    { pattern: /whisper\.|SpeechRecognition|pyttsx|text.to.speech/i,                          feature: 'Speech Processing' },
+    { pattern: /solana|ethereum|web3\.eth|@solana\/web3/i,                                    feature: 'Blockchain' },
+    { pattern: /FROM python:|FROM node:|docker-compose|DockerFile/i,                          feature: 'Containerization' },
+    { pattern: /tspl|ZPL\.|TSC.*TTP|pywin32.*print/i,                                        feature: 'Label Printing' },
   ];
 
   const foundFeatures = new Set<string>();
