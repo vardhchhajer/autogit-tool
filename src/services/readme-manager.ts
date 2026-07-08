@@ -76,8 +76,8 @@ export async function generateReadme(
   };
 }
 
-export function writeReadme(result: ReadmeResult): void {
-  const { writeFileSync } = require('fs');
+export async function writeReadme(result: ReadmeResult): Promise<void> {
+  const { writeFileSync } = await import('fs');
   writeFileSync(result.path, result.content, 'utf-8');
 }
 

@@ -145,7 +145,7 @@ async function handleReadme(
   }
 
   if (!options.dryRun) {
-    writeReadme(result);
+    await writeReadme(result);
     logger.success('README updated');
   } else {
     logger.dimmed('[dry-run] Would update README');

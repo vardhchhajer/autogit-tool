@@ -34,6 +34,6 @@ export async function cmdReadme(opts: { ai?: boolean; regenerate?: boolean }): P
     }
   }
 
-  writeReadme(result);
+  await writeReadme(result);
   logger.success(result.isNew ? 'README.md created' : 'README.md updated');
 }
