@@ -62,7 +62,7 @@ export async function generateLatexProjectEntry(
       { role: 'user', content: prompt },
     ];
 
-    const response = await provider.generate(messages, { temperature: 0.4, maxTokens: 1000 });
+    const response = await provider.generate(messages, { temperature: 0.4, maxTokens: 2000 });
     let entry = response.content.trim();
 
     // Strip any markdown fencing

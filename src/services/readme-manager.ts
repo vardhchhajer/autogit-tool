@@ -46,7 +46,7 @@ export async function generateReadme(
         { role: 'user', content: prompt },
       ];
 
-      const response = await provider.generate(messages, { temperature: 0.5, maxTokens: 4096 });
+      const response = await provider.generate(messages, { temperature: 0.5, maxTokens: 8192 });
       newContent = response.content.trim()
         .replace(/^```(?:markdown|md)?\n?/i, '')
         .replace(/\n?```$/i, '')

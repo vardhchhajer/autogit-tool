@@ -1,4 +1,5 @@
 import type { ScanResult } from '../scanner/file-scanner.js';
+import { getAIConfig } from '../config/manager.js';
 
 export interface CodeSummary {
   content: string;
@@ -16,9 +17,17 @@ const SOURCE_EXTS = new Set([
   '.kt', '.cs', '.rb', '.php', '.swift', '.vue', '.svelte',
 ]);
 
-// Keep under ~7k tokens (≈28k chars) — safe for Groq free tier (12k TPM limit)
-const MAX_TOTAL_CHARS = 22_000;
-const MAX_FILE_CHARS  = 18_000;
+// Generous providers (Gemini, OpenAI, Anthropic, etc.) get full content
+// Conservative providers (Groq free tier) get reduced content
+const GENEROUS_PROVIDERS = new Set(['gemini', 'openai', 'anthropic', 'openrouter', 'mistral', 'deepseek', 'azure-openai', 'xai']);
+
+function getTokenBudget(): { maxTotal: number; maxFile: number } {
+  const cfg = getAIConfig();
+  const isGenerous = GENEROUS_PROVIDERS.has(cfg.provider as string);
+  return isGenerous
+    ? { maxTotal: 160_000, maxFile: 120_000 }  // ~40k tokens — Gemini handles 1M/day
+    : { maxTotal: 22_000,  maxFile: 18_000 };   // ~5k tokens — Groq 12k TPM safe
+}
 
 /**
  * Build a smart code summary — extracts meaningful logic, strips boilerplate.
@@ -34,6 +43,8 @@ export async function buildCodeSummary(
 ): Promise<CodeSummary> {
   const { readFileSync } = await import('fs');
 
+  const { maxTotal, maxFile } = getTokenBudget();
+
   const sourceFiles = scan.files
     .filter(f =>
       SOURCE_EXTS.has(f.extension) &&
@@ -46,7 +57,7 @@ export async function buildCodeSummary(
   let filesRead = 0;
 
   for (const file of sourceFiles) {
-    if (totalChars >= MAX_TOTAL_CHARS) break;
+    if (totalChars >= maxTotal) break;
 
     let raw: string;
     try {
@@ -63,16 +74,16 @@ export async function buildCodeSummary(
 
     let content: string;
     if (file.extension === '.py') {
-      content = extractPythonCore(raw);
+      content = extractPythonCore(raw, maxTotal);
     } else if (['.ts', '.tsx', '.js', '.jsx'].includes(file.extension)) {
       content = extractJSCore(raw);
     } else {
       content = raw.slice(0, 6000);
     }
 
-    const remaining = MAX_TOTAL_CHARS - totalChars;
+    const remaining = maxTotal - totalChars;
     if (content.length > remaining) content = content.slice(0, remaining) + '\n# [truncated]';
-    if (content.length > MAX_FILE_CHARS) content = content.slice(0, MAX_FILE_CHARS) + '\n# [truncated]';
+    if (content.length > maxFile) content = content.slice(0, maxFile) + '\n# [truncated]';
     if (!content.trim()) continue;
 
     parts.push(`\n${'─'.repeat(50)}\n# FILE: ${file.relativePath}\n${'─'.repeat(50)}\n${content}`);
@@ -87,7 +98,11 @@ export async function buildCodeSummary(
  * Python: imports + constants + each function (docstring + first 30 body lines)
  * Skips functions that are >40% st.markdown/HTML rendering calls.
  */
-function extractPythonCore(raw: string): string {
+function extractPythonCore(raw: string, maxTotal: number): string {
+  // For generous providers (Gemini etc.) — return the full cleaned file
+  if (maxTotal > 50_000) {
+    return raw;
+  }
   const lines = raw.split('\n');
   const out: string[] = [];
 

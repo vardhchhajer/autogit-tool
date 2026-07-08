@@ -192,49 +192,59 @@ export function readmeGenerationPromptWithCode(
   existingReadme?: string
 ): string {
   const context = buildProjectContext(analysis);
+  const displayName = analysis.displayName || analysis.name;
 
-  const codeSection = `
-SOURCE CODE (${code.filesRead} file${code.filesRead !== 1 ? 's' : ''}, ${code.charCount.toLocaleString()} chars):
-${code.content}
-`.trim();
+  const codeSection = `SOURCE CODE (${code.filesRead} file${code.filesRead !== 1 ? 's' : ''}, ${code.charCount.toLocaleString()} chars read):
+${code.content}`;
 
   if (existingReadme) {
-    return `You are a technical documentation expert. Read the SOURCE CODE below to understand what this project actually does, then improve the README.
+    return `You are a senior technical writer. Read EVERY LINE of the source code below, then rewrite the README to accurately describe what this project actually does.
 
 ${codeSection}
 
 ---
-PROJECT METADATA:
-${context}
+METADATA: ${context}
 
 EXISTING README:
 ${existingReadme}
 
-INSTRUCTIONS:
-- Read the source code carefully to understand the real features, logic, and purpose.
-- Preserve existing custom content, badges, images, and links.
-- Fill in missing sections based on what you actually see in the code.
-- Do NOT invent features not present in the source code.
-- Use professional Markdown formatting.
-- Return ONLY the improved README content, no explanations.`;
+REQUIREMENTS — the README must:
+1. Title: Use "${displayName}" (not the folder name)
+2. Description: 2-3 sentences describing the REAL purpose based on the code — what problem it solves, who uses it
+3. Features: Bullet list of CONCRETE features visible in the code (functions, UI sections, calculations, integrations)
+4. Tech Stack: Every library imported in the source files
+5. Installation: Exact commands including dependencies visible in imports
+6. Usage: Step-by-step based on actual entry points seen in the code
+7. Preserve any badges, links, or custom content already in the README
+
+Do NOT use vague phrases like "manages data" or "provides functionality".
+Be specific: name the actual algorithms, calculations, integrations, and UI sections you see.
+Return ONLY the README markdown, no explanations.`;
   }
 
-  return `You are a technical documentation expert. Read the SOURCE CODE below carefully to understand what this project does, then generate a professional README.md.
+  return `You are a senior technical writer. Read EVERY LINE of the source code below, then write a professional README that accurately describes what this project does.
 
 ${codeSection}
 
 ---
-PROJECT METADATA:
-${context}
+METADATA: ${context}
 
-INSTRUCTIONS:
-- Read the source code to understand the real features, algorithms, and purpose — don't just rely on metadata.
-- Include: Title, Description (what it actually does), Features (from code), Tech Stack, Installation, Usage, Contributing, License.
-- For the Description: describe what the software actually does based on the code, not generic phrases.
-- For Features: list concrete capabilities you can see in the code.
-- For Usage: include the actual command to run it and what it does.
-- Do NOT invent anything not in the code.
-- Return ONLY the README content, no explanations.`;
+REQUIREMENTS — the README must:
+1. Title: Use "${displayName}"
+2. Description (2-3 sentences): What does this software actually DO? What problem does it solve? Be specific.
+3. Features: Bullet list of REAL features from the code — name actual functions, algorithms, UI components, data flows
+4. Tech Stack: Every library found in import statements
+5. Installation: Exact commands based on what you see in the code
+6. Usage: Step-by-step instructions based on actual entry points and UI flow visible in the code
+7. How It Works (optional): If there's interesting logic (formulas, algorithms), briefly explain it
+8. Contributing section
+
+Rules:
+- Name the actual algorithms and calculations you see (e.g. "longation percentage calculation")
+- Reference real UI sections, tabs, and input fields seen in the code
+- Do NOT invent features not in the code
+- Do NOT use generic placeholder text
+Return ONLY the README markdown, nothing else.`;
 }
 
 /** Resume entry generation with actual source code content */
@@ -247,34 +257,37 @@ export function resumePromptWithCode(
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries]
     .filter(Boolean).join(', ');
 
-  return `You are a professional resume writer. Read the SOURCE CODE below to understand what this project does, then write a LaTeX resume entry for ${ownerName}'s technical resume.
+  return `You are a senior technical resume writer. Read EVERY LINE of the source code below. Understand what it actually does. Then write a LaTeX resume entry for ${ownerName}.
 
-SOURCE CODE (${code.filesRead} file${code.filesRead !== 1 ? 's' : ''}):
+SOURCE CODE:
 ${code.content}
 
 ---
-PROJECT METADATA:
-- Name: ${displayName}
-- Tech Stack: ${techStack}
-- Features detected: ${analysis.codeFeatures.join(', ') || 'See code'}
+PROJECT: ${displayName}
+TECH STACK: ${techStack}
 
-INSTRUCTIONS:
-1. Read the code carefully. Understand the real algorithms, data flows, and capabilities.
-2. Use this EXACT LaTeX structure:
-   \\resumeProjectHeading
-       {\\textbf{${displayName}} $|$ \\emph{Category}}{}
-       \\resumeItemListStart
-         \\resumeItem{Bullet 1}
-         \\resumeItem{Bullet 2}
-         \\resumeItem{Bullet 3}
-         \\resumeItem{\\textbf{Tech Stack:} ${techStack}}
-       \\resumeItemListEnd
+REQUIREMENTS:
+1. Use this EXACT LaTeX structure:
+\\resumeProjectHeading
+    {\\textbf{${displayName}} $|$ \\emph{Category}}{}
+    \\resumeItemListStart
+      \\resumeItem{Bullet 1}
+      \\resumeItem{Bullet 2}
+      \\resumeItem{Bullet 3}
+      \\resumeItem{\\textbf{Tech Stack:} ${techStack}}
+    \\resumeItemListEnd
 
-3. Write 3-5 bullets that are SPECIFIC to this codebase:
-   - Mention actual algorithms, calculations, or business logic you see in the code
-   - Reference real UI components, data flows, or integrations
-   - Use strong action verbs (Built, Implemented, Engineered, Designed, Developed)
-   - Be technical and concrete — avoid vague generic bullets
+2. Write 3-5 bullets. Each bullet must reference SOMETHING SPECIFIC from the code:
+   - Name actual functions, algorithms, calculations, or data structures (e.g. "8-step fabric shortage algorithm")
+   - Reference real UI components or sections visible in the code
+   - Mention specific integrations, file formats, or data flows
+   - Use strong action verbs: Built, Engineered, Implemented, Designed, Developed
+   - Be technical and concrete — no vague bullets like "managed data" or "implemented features"
+
+3. Good example style:
+   \\resumeItem{Engineered a fabric shortage calculator using an 8-step assorted/unassorted matching algorithm that computes longation percentage and predicts bleach shortfall.}
+   \\resumeItem{Built PDF report generation using ReportLab with multi-table layouts, side-by-side breakdowns, and sorted unassorted data grids.}
+
 4. Last bullet MUST be: \\textbf{Tech Stack:} ${techStack}
-5. Return ONLY the LaTeX block — no explanation, no markdown fences, no commentary.`;
+5. Return ONLY the LaTeX block — no explanation, no markdown fences.`;
 }
