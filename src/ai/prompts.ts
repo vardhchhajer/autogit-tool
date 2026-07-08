@@ -1,4 +1,5 @@
 import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
+import type { CodeSummary } from './code-reader.js';
 
 export function buildProjectContext(analysis: ProjectAnalysis): string {
   return `
@@ -182,4 +183,98 @@ Provide JSON output with this structure:
 }
 
 Be honest and constructive. Return ONLY valid JSON.`;
+}
+
+/** README generation with actual source code content */
+export function readmeGenerationPromptWithCode(
+  analysis: ProjectAnalysis,
+  code: CodeSummary,
+  existingReadme?: string
+): string {
+  const context = buildProjectContext(analysis);
+
+  const codeSection = `
+SOURCE CODE (${code.filesRead} file${code.filesRead !== 1 ? 's' : ''}, ${code.charCount.toLocaleString()} chars):
+${code.content}
+`.trim();
+
+  if (existingReadme) {
+    return `You are a technical documentation expert. Read the SOURCE CODE below to understand what this project actually does, then improve the README.
+
+${codeSection}
+
+---
+PROJECT METADATA:
+${context}
+
+EXISTING README:
+${existingReadme}
+
+INSTRUCTIONS:
+- Read the source code carefully to understand the real features, logic, and purpose.
+- Preserve existing custom content, badges, images, and links.
+- Fill in missing sections based on what you actually see in the code.
+- Do NOT invent features not present in the source code.
+- Use professional Markdown formatting.
+- Return ONLY the improved README content, no explanations.`;
+  }
+
+  return `You are a technical documentation expert. Read the SOURCE CODE below carefully to understand what this project does, then generate a professional README.md.
+
+${codeSection}
+
+---
+PROJECT METADATA:
+${context}
+
+INSTRUCTIONS:
+- Read the source code to understand the real features, algorithms, and purpose — don't just rely on metadata.
+- Include: Title, Description (what it actually does), Features (from code), Tech Stack, Installation, Usage, Contributing, License.
+- For the Description: describe what the software actually does based on the code, not generic phrases.
+- For Features: list concrete capabilities you can see in the code.
+- For Usage: include the actual command to run it and what it does.
+- Do NOT invent anything not in the code.
+- Return ONLY the README content, no explanations.`;
+}
+
+/** Resume entry generation with actual source code content */
+export function resumePromptWithCode(
+  analysis: ProjectAnalysis,
+  code: CodeSummary,
+  ownerName: string
+): string {
+  const displayName = analysis.displayName || analysis.name;
+  const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries]
+    .filter(Boolean).join(', ');
+
+  return `You are a professional resume writer. Read the SOURCE CODE below to understand what this project does, then write a LaTeX resume entry for ${ownerName}'s technical resume.
+
+SOURCE CODE (${code.filesRead} file${code.filesRead !== 1 ? 's' : ''}):
+${code.content}
+
+---
+PROJECT METADATA:
+- Name: ${displayName}
+- Tech Stack: ${techStack}
+- Features detected: ${analysis.codeFeatures.join(', ') || 'See code'}
+
+INSTRUCTIONS:
+1. Read the code carefully. Understand the real algorithms, data flows, and capabilities.
+2. Use this EXACT LaTeX structure:
+   \\resumeProjectHeading
+       {\\textbf{${displayName}} $|$ \\emph{Category}}{}
+       \\resumeItemListStart
+         \\resumeItem{Bullet 1}
+         \\resumeItem{Bullet 2}
+         \\resumeItem{Bullet 3}
+         \\resumeItem{\\textbf{Tech Stack:} ${techStack}}
+       \\resumeItemListEnd
+
+3. Write 3-5 bullets that are SPECIFIC to this codebase:
+   - Mention actual algorithms, calculations, or business logic you see in the code
+   - Reference real UI components, data flows, or integrations
+   - Use strong action verbs (Built, Implemented, Engineered, Designed, Developed)
+   - Be technical and concrete — avoid vague generic bullets
+4. Last bullet MUST be: \\textbf{Tech Stack:} ${techStack}
+5. Return ONLY the LaTeX block — no explanation, no markdown fences, no commentary.`;
 }

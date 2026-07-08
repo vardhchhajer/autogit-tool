@@ -4,6 +4,8 @@ import { homedir } from 'os';
 import { createRequire } from 'module';
 import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
 import { getProvider, type AIMessage } from '../ai/provider.js';
+import { resumePromptWithCode } from '../ai/prompts.js';
+import { buildCodeSummary } from '../ai/code-reader.js';
 import { logger, spinner } from '../utils/logger.js';
 
 // createRequire is needed to use CJS modules (node-latex, stream) inside ESM
@@ -28,29 +30,45 @@ export interface ResumeUpdateResult {
 export async function generateLatexProjectEntry(
   analysis: ProjectAnalysis,
   useAI: boolean,
-  ownerName: string
+  ownerName: string,
+  scan?: import('../scanner/file-scanner.js').ScanResult,
+  rootDir?: string
 ): Promise<string> {
   if (!useAI) {
     return generateTemplateEntry(analysis);
   }
 
-  const spin = spinner('Generating resume entry with AI...').start();
+  const spin = spinner('Reading project files and generating resume entry...').start();
   try {
     const provider = getProvider();
-    const prompt = buildResumePrompt(analysis, ownerName);
+
+    // Build code summary from actual source files
+    let prompt: string;
+    if (scan) {
+      const dir = rootDir || process.cwd();
+      const code = await buildCodeSummary(dir, scan);
+      spin.text = `Analyzing ${code.filesRead} source file(s) (${Math.round(code.charCount / 1000)}k chars)...`;
+      prompt = resumePromptWithCode(analysis, code, ownerName);
+    } else {
+      // Fallback to metadata-only prompt if no scan available
+      prompt = buildFallbackResumePrompt(analysis, ownerName);
+    }
 
     const messages: AIMessage[] = [
-      { role: 'system', content: 'You are a professional resume writer specializing in technical resumes for software engineers.' },
+      {
+        role: 'system',
+        content: 'You are a professional resume writer. You read source code carefully and write precise, technical resume bullets based on what the code actually does.',
+      },
       { role: 'user', content: prompt },
     ];
 
-    const response = await provider.generate(messages, { temperature: 0.6, maxTokens: 800 });
+    const response = await provider.generate(messages, { temperature: 0.4, maxTokens: 1000 });
     let entry = response.content.trim();
 
-    // Strip markdown fencing if present
+    // Strip any markdown fencing
     entry = entry.replace(/^```(?:latex|tex)?\n?/i, '').replace(/\n?```$/i, '').trim();
 
-    spin.succeed('Resume entry generated');
+    spin.succeed('Resume entry generated from source code analysis');
     return entry;
   } catch (error: any) {
     spin.fail('AI generation failed');
@@ -194,7 +212,7 @@ function compileWithNodeLatex(latex: any, source: string, texPath: string): Prom
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildResumePrompt(analysis: ProjectAnalysis, ownerName: string): string {
+function buildFallbackResumePrompt(analysis: ProjectAnalysis, ownerName: string): string {
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries].join(', ');
   const displayName = analysis.displayName || analysis.name;
   const ctx = (analysis as any)._codeContext as {

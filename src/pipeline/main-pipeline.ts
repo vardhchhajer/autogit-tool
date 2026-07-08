@@ -58,7 +58,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   // Step 3: README
   let readmeResult: ReadmeResult | null = null;
   if (!options.skipReadme) {
-    readmeResult = await handleReadme(rootDir, analysis, useAI, options);
+    readmeResult = await handleReadme(rootDir, analysis, useAI, options, scan);
   }
 
   // Step 4: Additional documentation
@@ -67,7 +67,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   // Step 5: Resume auto-update — runs AFTER git init but BEFORE commit
   // so the updated resume can be included in the same commit
   if (!options.skipResume && !options.dryRun) {
-    await handleResume(rootDir, useAI, options);
+    await handleResume(rootDir, useAI, options, scan);
   } else if (options.dryRun) {
     logger.dimmed('[dry-run] Would update resume (if configured)');
   }
@@ -114,9 +114,10 @@ async function handleReadme(
   rootDir: string,
   analysis: ProjectAnalysis,
   useAI: boolean,
-  options: PipelineOptions
+  options: PipelineOptions,
+  scan: import('../scanner/file-scanner.js').ScanResult
 ): Promise<ReadmeResult | null> {
-  const result = await generateReadme(rootDir, analysis, useAI);
+  const result = await generateReadme(rootDir, analysis, useAI, scan);
 
   if (result.isNew) {
     logger.info('No README found. Generated new README.md');
@@ -397,25 +398,22 @@ async function handleSocialContent(
 async function handleResume(
   rootDir: string,
   useAI: boolean,
-  options: PipelineOptions
+  options: PipelineOptions,
+  scan?: import('../scanner/file-scanner.js').ScanResult
 ): Promise<void> {
   const config = loadConfig();
 
-  // Skip silently if resume not configured and --yes is set (non-interactive mode)
   if (!config.resume?.path) {
     if (!options.yes) {
-      // Offer setup only in interactive mode
-      await runResumeUpdate(rootDir, useAI, true);
+      await runResumeUpdate(rootDir, useAI, true, scan);
     }
     return;
   }
 
-  // Skip if resume auto-update is explicitly disabled in config
   if (config.resume.enabled === false) {
     logger.dimmed('Resume auto-update disabled (run "autogit resume" to update manually)');
     return;
   }
 
-  // Run resume update — interactive unless --yes
-  await runResumeUpdate(rootDir, useAI, !options.yes);
+  await runResumeUpdate(rootDir, useAI, !options.yes, scan);
 }

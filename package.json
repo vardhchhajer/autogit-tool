@@ -1,6 +1,6 @@
 {
   "name": "autogit-tool",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Automate project documentation, GitHub publishing, and social media content generation — run autogit in any project folder",
   "type": "module",
   "main": "dist/index.js",

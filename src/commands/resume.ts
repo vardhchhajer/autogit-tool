@@ -32,14 +32,14 @@ export async function cmdResume(opts: ResumeCommandOpts): Promise<void> {
 export async function runResumeUpdate(
   projectDir: string,
   useAI: boolean,
-  interactive: boolean
+  interactive: boolean,
+  existingScan?: import('../scanner/file-scanner.js').ScanResult
 ): Promise<void> {
   const config = loadConfig();
   const resumeCfg = config.resume;
 
-  // If resume isn't configured yet, offer to set it up interactively
   if (!resumeCfg?.path || !existsSync(resumeCfg.path)) {
-    if (!interactive) return; // skip silently during non-interactive pipeline
+    if (!interactive) return;
     logger.blank();
     logger.info('Resume file not configured.');
     const { setup } = await inquirer.prompt<{ setup: boolean }>([{
@@ -50,27 +50,25 @@ export async function runResumeUpdate(
     }]);
     if (!setup) return;
     await setupResume();
-
-    // Re-load after setup
     const updated = loadConfig();
     if (!updated.resume?.path) return;
   }
 
   const finalConfig = loadConfig();
   const resumePath = finalConfig.resume!.path!;
-  const ownerName  = finalConfig.resume?.ownerName  || 'Developer';
+  const ownerName  = finalConfig.resume?.ownerName || 'Developer';
 
-  // Analyse the current project
-  const scan    = scanProject(projectDir);
+  // Reuse existing scan from pipeline or create a fresh one
+  const scan     = existingScan ?? scanProject(projectDir);
   const analysis = await analyzeProject(projectDir, scan);
 
   logger.header('Resume Update');
-  logger.info(`Project: ${chalk.bold(analysis.name)}`);
+  logger.info(`Project: ${chalk.bold(analysis.displayName || analysis.name)}`);
   logger.info(`Resume:  ${chalk.dim(resumePath)}`);
   logger.blank();
 
-  // Generate the LaTeX entry
-  const entry = await generateLatexProjectEntry(analysis, useAI, ownerName);
+  // Pass scan so AI can read full file contents
+  const entry = await generateLatexProjectEntry(analysis, useAI, ownerName, scan, projectDir);
 
   // Preview the entry
   logger.blank();

@@ -4,8 +4,10 @@ import { createPatch } from 'diff';
 import chalk from 'chalk';
 import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
 import { getProvider, type AIMessage } from '../ai/provider.js';
-import { readmeGenerationPrompt } from '../ai/prompts.js';
+import { readmeGenerationPromptWithCode, readmeGenerationPrompt } from '../ai/prompts.js';
+import { buildCodeSummary } from '../ai/code-reader.js';
 import { logger, spinner } from '../utils/logger.js';
+import type { ScanResult } from '../scanner/file-scanner.js';
 
 export interface ReadmeResult {
   content: string;
@@ -17,43 +19,40 @@ export interface ReadmeResult {
 export async function generateReadme(
   rootDir: string,
   analysis: ProjectAnalysis,
-  useAI: boolean
+  useAI: boolean,
+  scan?: ScanResult
 ): Promise<ReadmeResult> {
-  const readmePath = analysis.readmePath || join(rootDir, 'README.md');
+  const { existsSync, readFileSync } = await import('fs');  const readmePath = analysis.readmePath || join(rootDir, 'README.md');
   const existingContent = existsSync(readmePath) ? readFileSync(readmePath, 'utf-8') : null;
 
   let newContent: string;
 
   if (useAI) {
-    const spin = spinner('Generating README with AI...').start();
+    const spin = spinner('Reading source files for README generation...').start();
     try {
       const provider = getProvider();
-      const prompt = readmeGenerationPrompt(analysis, existingContent || undefined);
+
+      let prompt: string;
+      if (scan) {
+        const code = await buildCodeSummary(rootDir, scan);
+        spin.text = `Generating README from ${code.filesRead} source file(s)...`;
+        prompt = readmeGenerationPromptWithCode(analysis, code, existingContent || undefined);
+      } else {
+        prompt = readmeGenerationPrompt(analysis, existingContent || undefined);
+      }
 
       const messages: AIMessage[] = [
-        { role: 'system', content: 'You are a professional technical documentation writer.' },
+        { role: 'system', content: 'You are a professional technical documentation writer. Read the code carefully before writing.' },
         { role: 'user', content: prompt },
       ];
 
-      const response = await provider.generate(messages, { temperature: 0.5 });
-      newContent = response.content.trim();
+      const response = await provider.generate(messages, { temperature: 0.5, maxTokens: 4096 });
+      newContent = response.content.trim()
+        .replace(/^```(?:markdown|md)?\n?/i, '')
+        .replace(/\n?```$/i, '')
+        .trim();
 
-      // Clean up any markdown fencing the AI might have added
-      if (newContent.startsWith('```markdown')) {
-        newContent = newContent.slice('```markdown'.length);
-      }
-      if (newContent.startsWith('```md')) {
-        newContent = newContent.slice('```md'.length);
-      }
-      if (newContent.startsWith('```')) {
-        newContent = newContent.slice(3);
-      }
-      if (newContent.endsWith('```')) {
-        newContent = newContent.slice(0, -3);
-      }
-      newContent = newContent.trim();
-
-      spin.succeed('README generated with AI');
+      spin.succeed('README generated from source code analysis');
     } catch (error: any) {
       spin.fail('AI generation failed');
       logger.warn(`Falling back to template: ${error.message}`);
@@ -78,6 +77,7 @@ export async function generateReadme(
 }
 
 export function writeReadme(result: ReadmeResult): void {
+  const { writeFileSync } = require('fs');
   writeFileSync(result.path, result.content, 'utf-8');
 }
 

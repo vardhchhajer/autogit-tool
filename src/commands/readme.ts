@@ -10,11 +10,11 @@ export async function cmdReadme(opts: { ai?: boolean; regenerate?: boolean }): P
 
   logger.header('README Generator');
 
-  const scan = scanProject(rootDir);
+  const scan    = scanProject(rootDir);
   const analysis = await analyzeProject(rootDir, scan);
   const useAI = opts.ai !== false;
 
-  const result = await generateReadme(rootDir, analysis, useAI);
+  const result = await generateReadme(rootDir, analysis, useAI, scan);
 
   if (result.diff) {
     logger.blank();
