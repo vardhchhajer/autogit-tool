@@ -197,10 +197,15 @@ function compileWithNodeLatex(latex: any, source: string, texPath: string): Prom
 function buildResumePrompt(analysis: ProjectAnalysis, ownerName: string): string {
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries].join(', ');
   const displayName = analysis.displayName || analysis.name;
+  const ctx = (analysis as any)._codeContext as {
+    functions: string[];
+    docstrings: string[];
+    uiSections: string[];
+    description: string | null;
+  } | undefined;
 
   const featureList = [...new Set([...analysis.codeFeatures, ...analysis.features])]
-    .slice(0, 8)
-    .join(', ') || 'Core functionality';
+    .slice(0, 10).join(', ') || 'Core functionality';
 
   const routesSummary = analysis.apiRoutes.length > 0
     ? `API routes: ${analysis.apiRoutes.slice(0, 8).join(', ')}`
@@ -211,25 +216,38 @@ function buildResumePrompt(analysis: ProjectAnalysis, ownerName: string): string
     analysis.componentCount > 0 ? `${analysis.componentCount} components` : '',
   ].filter(Boolean).join(', ');
 
+  const functionsSection = ctx?.functions?.length
+    ? `Functions/modules: ${ctx.functions.slice(0, 12).join(', ')}`
+    : '';
+
+  const docstringSection = ctx?.docstrings?.length
+    ? `Code documentation:\n${ctx.docstrings.slice(0, 3).map(d => `  - ${d}`).join('\n')}`
+    : '';
+
+  const uiSection = ctx?.uiSections?.length
+    ? `UI sections/tabs: ${ctx.uiSections.join(', ')}`
+    : '';
+
   return `Generate a LaTeX resume project entry for ${ownerName}'s technical resume.
 
 PROJECT DETAILS:
 - Display Name: ${displayName}
-- Package/Folder Name: ${analysis.name}
-- Description: ${analysis.description || 'A software project'}
+- Description: ${analysis.description || ctx?.description || 'A software project'}
 - Tech Stack: ${techStack}
 - Architecture: ${analysis.architecture}
 - Features detected from source code: ${featureList}
 ${routesSummary ? `- ${routesSummary}` : ''}
 ${scale ? `- Scale: ${scale}` : ''}
+${functionsSection ? `- ${functionsSection}` : ''}
+${uiSection ? `- ${uiSection}` : ''}
+${docstringSection ? `\n${docstringSection}` : ''}
 ${analysis.database.length > 0 ? `- Database: ${analysis.database.join(', ')}` : ''}
 ${analysis.deployment.length > 0 ? `- Deployment: ${analysis.deployment.join(', ')}` : ''}
-${analysis.cicd.length > 0 ? `- CI/CD: ${analysis.cicd.join(', ')}` : ''}
 
 INSTRUCTIONS:
 1. Use EXACTLY this LaTeX structure:
    \\resumeProjectHeading
-       {\\textbf{${displayName}} $|$ \\emph{Category/Type}}{}
+       {\\textbf{${displayName}} $|$ \\emph{Category}}{}
        \\resumeItemListStart
          \\resumeItem{Bullet 1}
          \\resumeItem{Bullet 2}
@@ -237,10 +255,10 @@ INSTRUCTIONS:
          \\resumeItem{\\textbf{Tech Stack:} technologies}
        \\resumeItemListEnd
 
-2. Use "${displayName}" as the project name in \\textbf{} — NOT the package name "${analysis.name}".
-3. Write 3-5 bullet points using strong action verbs (Built, Developed, Engineered, Implemented, Designed).
-4. Reference the actual features found in the code — be specific (e.g. mention barcode scanning, PDF export, etc.).
-5. Include scale details (pages, components, routes) if meaningful.
+2. The project name in \\textbf{} MUST be "${displayName}".
+3. Write 3-5 specific bullets using strong action verbs.
+4. Reference the ACTUAL functions, features, and UI sections from the code — be concrete and technical.
+5. If docstrings describe the algorithm, mention it (e.g. "longation calculation", "shortage formula").
 6. Last bullet MUST be: \\textbf{Tech Stack:} [full list]
 7. Return ONLY the LaTeX block — no explanation, no markdown fences.`;
 }
@@ -248,8 +266,7 @@ INSTRUCTIONS:
 function generateTemplateEntry(analysis: ProjectAnalysis): string {
   const displayName = analysis.displayName || analysis.name;
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries]
-    .slice(0, 10)
-    .join(', ');
+    .filter(Boolean).slice(0, 10).join(', ');
 
   const projectType = analysis.frameworks.length > 0
     ? `${analysis.frameworks[0]} Project`
@@ -257,32 +274,44 @@ function generateTemplateEntry(analysis: ProjectAnalysis): string {
     ? `${analysis.languages[0]} Project`
     : 'Software Project';
 
+  const ctx = (analysis as any)._codeContext as {
+    functions: string[];
+    docstrings: string[];
+    uiSections: string[];
+    description: string | null;
+  } | undefined;
+
   const bullets: string[] = [];
 
-  // Bullet 1: what was built using display name
-  if (analysis.description) {
-    bullets.push(`Built ${displayName} — ${analysis.description.toLowerCase()}.`);
+  // Bullet 1: what was built — use display name and description
+  const desc = analysis.description || ctx?.description;
+  if (desc && !desc.match(/^(initialize|helper|utility)/i)) {
+    // Capitalize first letter, end with period
+    const cleaned = desc.charAt(0).toUpperCase() + desc.slice(1).replace(/\.?$/, '.');
+    bullets.push(`Built ${displayName} — ${cleaned}`);
+  } else if (ctx?.functions && ctx.functions.length > 0) {
+    const mainFuncs = ctx.functions.filter(f => !['init_state','load_reports','save_reports'].includes(f));
+    bullets.push(`Developed ${displayName} implementing ${mainFuncs.slice(0,3).join(', ')} logic.`);
   } else {
     bullets.push(`Developed ${displayName}, a ${analysis.architecture.toLowerCase()} application.`);
   }
 
-  // Bullet 2: specific code features if available
+  // Bullet 2: specific code features
   if (analysis.codeFeatures.length > 0) {
-    bullets.push(`Implemented ${analysis.codeFeatures.slice(0, 3).join(', ').toLowerCase()}.`);
-  } else if (analysis.features.length > 0) {
-    bullets.push(`Implemented ${analysis.features[0].toLowerCase()}.`);
+    bullets.push(`Implemented ${analysis.codeFeatures.slice(0, 4).join(', ').toLowerCase()}.`);
   } else if (analysis.database.length > 0) {
-    bullets.push(`Designed system architecture with ${analysis.database[0]} database integration.`);
-  } else {
-    bullets.push(`Engineered modular ${analysis.architecture.toLowerCase()} with focus on maintainability.`);
+    bullets.push(`Designed system with ${analysis.database[0]} database integration.`);
   }
 
-  // Bullet 3: scale if meaningful
-  if (analysis.pageCount > 0 || analysis.componentCount > 0) {
-    const parts = [];
+  // Bullet 3: UI sections if available
+  if (ctx?.uiSections && ctx.uiSections.length > 0) {
+    const sections = ctx.uiSections.filter(s => s && s.length > 3).slice(0, 4).join(', ');
+    bullets.push(`Built interactive UI with sections: ${sections}.`);
+  } else if (analysis.pageCount > 0 || analysis.componentCount > 0) {
+    const parts: string[] = [];
     if (analysis.pageCount > 0) parts.push(`${analysis.pageCount} pages`);
     if (analysis.componentCount > 0) parts.push(`${analysis.componentCount} components`);
-    bullets.push(`Built ${parts.join(' and ')} with full routing and state management.`);
+    bullets.push(`Structured application with ${parts.join(' and ')}.`);
   }
 
   // Tech stack bullet

@@ -533,101 +533,188 @@ function detectTestFramework(rootDir: string, scan: ScanResult, analysis: Projec
 
 // ─── Deep code analysis ───────────────────────────────────────────────────────
 
+export interface CodeContext {
+  functions: string[];
+  docstrings: string[];
+  uiSections: string[];
+  tabNames: string[];
+  description: string | null;
+}
+
 /**
- * Read actual source files to extract:
+ * Read source files thoroughly to extract:
+ * - Function names and docstrings
+ * - UI section names and tabs
  * - Routes / API endpoints
- * - Page and component counts
- * - Concrete features (auth, file upload, payment, etc.)
+ * - Concrete features
  */
 async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: ProjectAnalysis): Promise<void> {
   const sourceExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.cs', '.java', '.kt'];
   const sourceFiles = scan.files
     .filter(f => sourceExts.includes(f.extension))
-    .slice(0, 60); // cap to keep things fast
+    .slice(0, 60);
 
   // Count pages and components
-  const pageFiles = scan.files.filter(f =>
+  analysis.pageCount = scan.files.filter(f =>
     f.relativePath.match(/\/(pages|app|views|screens)\/.*\.(tsx?|jsx?|py|vue|svelte)$/i)
-  );
-  const componentFiles = scan.files.filter(f =>
+  ).length;
+  analysis.componentCount = scan.files.filter(f =>
     f.relativePath.match(/\/components?\/.*\.(tsx?|jsx?|vue|svelte)$/i)
-  );
-  analysis.pageCount = pageFiles.length;
-  analysis.componentCount = componentFiles.length;
+  ).length;
 
-  // Feature detection patterns — more precise to avoid false positives
   const featurePatterns: Array<{ pattern: RegExp; feature: string }> = [
-    { pattern: /\b(?:auth|login|signin|signup)\b|jwt\.sign|passport\.use|oauth/i,           feature: 'Authentication' },
-    { pattern: /file_uploader|st\.file_uploader|multer|formdata|FileUpload|file.*upload/i,   feature: 'File Upload' },
-    { pattern: /stripe|payment|checkout|billing/i,                                            feature: 'Payment Integration' },
-    { pattern: /socket\.io|new WebSocket|websocket\.connect|\.on\(['"]message/i,              feature: 'Real-time (WebSocket)' },
-    { pattern: /nodemailer|sendgrid|mailgun|smtplib|smtp\.send/i,                             feature: 'Email Notifications' },
-    { pattern: /push_notification|fcm|apns|firebase.*message/i,                               feature: 'Push Notifications' },
-    { pattern: /plotly\.|recharts|d3\.select|Chart\.js|st\.plotly_chart|st\.bar_chart/i,      feature: 'Data Visualization' },
-    { pattern: /reportlab|pdfkit|puppeteer.*pdf|fpdf|SimpleDocTemplate/i,                     feature: 'PDF Generation' },
-    { pattern: /celery|bull\.Queue|agenda\.every|crontab|schedule\.every/i,                   feature: 'Background Jobs' },
-    { pattern: /redis\.set|memcache|\.cache\(|cache\.get/i,                                   feature: 'Caching' },
-    { pattern: /elasticsearch|algolia|whoosh\.index|solr/i,                                   feature: 'Search' },
-    { pattern: /leaflet\.|mapbox|google\.maps|folium\.Map/i,                                  feature: 'Maps Integration' },
-    { pattern: /openai\.|anthropic\.|gemini\.|langchain|LLM\(|ChatOpenAI/i,                   feature: 'AI Integration' },
-    { pattern: /barcode|qrcode|cv2\.QRCode|scanner\.decode/i,                                 feature: 'Barcode/QR Scanner' },
-    { pattern: /st\.metric|st\.dataframe.*dashboard|Plotly.*dashboard|analytics.*dashboard/i, feature: 'Analytics Dashboard' },
-    { pattern: /\.create\(|\.update\(|\.delete\(|\.findOne\(|session\.add|session\.delete/i,  feature: 'CRUD Operations' },
-    { pattern: /to_csv|\.to_excel|csv\.writer|st\.download_button.*csv/i,                     feature: 'Data Export' },
-    { pattern: /pd\.read_excel|pd\.read_csv|openpyxl\.load|xlrd\.open/i,                      feature: 'Data Import' },
-    { pattern: /\brole\b.*permission|rbac|acl\.|@roles_required/i,                            feature: 'Role-based Access Control' },
-    { pattern: /AES\.encrypt|RSA\.|Fernet\(|crypto\.createCipher/i,                           feature: 'Encryption' },
-    { pattern: /twilio\.|vonage\.|nexmo\.|sms\.send/i,                                        feature: 'SMS Integration' },
-    { pattern: /whisper\.|SpeechRecognition|pyttsx|text.to.speech/i,                          feature: 'Speech Processing' },
-    { pattern: /solana|ethereum|web3\.eth|@solana\/web3/i,                                    feature: 'Blockchain' },
-    { pattern: /FROM python:|FROM node:|docker-compose|DockerFile/i,                          feature: 'Containerization' },
-    { pattern: /tspl|ZPL\.|TSC.*TTP|pywin32.*print/i,                                        feature: 'Label Printing' },
+    { pattern: /\b(?:auth|login|signin|signup)\b|jwt\.sign|passport\.use|oauth/i,            feature: 'Authentication' },
+    { pattern: /file_uploader|st\.file_uploader|multer|formdata|FileUpload|file.*upload/i,    feature: 'File Upload' },
+    { pattern: /stripe|payment|checkout|billing/i,                                             feature: 'Payment Integration' },
+    { pattern: /socket\.io|new WebSocket|websocket\.connect|\.on\(['"]message/i,               feature: 'Real-time (WebSocket)' },
+    { pattern: /nodemailer|sendgrid|mailgun|smtplib|smtp\.send/i,                              feature: 'Email Notifications' },
+    { pattern: /push_notification|fcm|apns|firebase.*message/i,                                feature: 'Push Notifications' },
+    { pattern: /plotly\.|recharts|d3\.select|Chart\.js|st\.plotly_chart|st\.bar_chart/i,       feature: 'Data Visualization' },
+    { pattern: /reportlab|pdfkit|puppeteer.*pdf|fpdf|SimpleDocTemplate/i,                      feature: 'PDF Generation' },
+    { pattern: /celery|bull\.Queue|agenda\.every|crontab|schedule\.every/i,                    feature: 'Background Jobs' },
+    { pattern: /redis\.set|memcache|\.cache\(|cache\.get/i,                                    feature: 'Caching' },
+    { pattern: /elasticsearch|algolia|whoosh\.index|solr/i,                                    feature: 'Search' },
+    { pattern: /leaflet\.|mapbox|google\.maps|folium\.Map/i,                                   feature: 'Maps Integration' },
+    { pattern: /openai\.|anthropic\.|gemini\.|langchain|LLM\(|ChatOpenAI/i,                    feature: 'AI Integration' },
+    { pattern: /barcode|qrcode|cv2\.QRCode|scanner\.decode/i,                                  feature: 'Barcode/QR Scanner' },
+    { pattern: /st\.metric|st\.dataframe|plotly.*dashboard|analytics.*dashboard/i,             feature: 'Analytics Dashboard' },
+    { pattern: /\.create\(|\.update\(|\.delete\(|\.findOne\(|session\.add|session\.delete/i,   feature: 'CRUD Operations' },
+    { pattern: /to_csv|\.to_excel|csv\.writer|st\.download_button/i,                           feature: 'Data Export' },
+    { pattern: /pd\.read_excel|pd\.read_csv|openpyxl\.load|xlrd\.open/i,                       feature: 'Data Import' },
+    { pattern: /\brole\b.*permission|rbac|acl\.|@roles_required/i,                             feature: 'Role-based Access Control' },
+    { pattern: /AES\.encrypt|RSA\.|Fernet\(|crypto\.createCipher/i,                            feature: 'Encryption' },
+    { pattern: /twilio\.|vonage\.|nexmo\.|sms\.send/i,                                         feature: 'SMS Integration' },
+    { pattern: /whisper\.|SpeechRecognition|pyttsx|text.to.speech/i,                           feature: 'Speech Processing' },
+    { pattern: /solana|ethereum|web3\.eth|@solana\/web3/i,                                     feature: 'Blockchain' },
+    { pattern: /FROM python:|FROM node:|docker-compose|DockerFile/i,                           feature: 'Containerization' },
+    { pattern: /tspl|ZPL\.|TSC.*TTP|pywin32.*print/i,                                         feature: 'Label Printing' },
+    { pattern: /json\.dump|json\.load|save_report|load_report/i,                               feature: 'Report Persistence' },
+    { pattern: /st\.tabs?\s*\(\[/i,                                                             feature: 'Multi-tab Interface' },
+    { pattern: /st\.sidebar/i,                                                                  feature: 'Sidebar Navigation' },
+    { pattern: /st\.data_editor|st\.dataframe/i,                                               feature: 'Interactive Data Tables' },
   ];
 
   const foundFeatures = new Set<string>();
   const routes: string[] = [];
+  const allFunctions: string[] = [];
+  const allDocstrings: string[] = [];
+  const allUISections: string[] = [];
+  let inferredDescription: string | null = null;
 
-  // Route extraction patterns
   const routePatterns = [
     /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"`](\/[^'"` ]*)/gi,
     /@(?:Get|Post|Put|Delete|Patch)\s*\(\s*['"`](\/[^'"` ]*)/gi,
     /path\s*=\s*['"`](\/[^'"` ]+)/gi,
-    /url_prefix\s*=\s*['"`](\/[^'"` ]+)/gi,
   ];
 
-  for (const file of sourceFiles) {
-    // Try UTF-8 first, then latin-1 fallback for files with emoji/special chars
-    let content = readFileContent(file.path, 30000);
-    if (!content) {
-      try {
-        const { readFileSync } = await import('fs');
-        content = readFileSync(file.path, 'latin1').slice(0, 30000);
-      } catch { continue; }
-    }
+  const { readFileSync: _readFileSync } = await import('fs');
 
-    // Feature detection
+  for (const file of sourceFiles) {
+    // Always use latin1 — handles emoji, special chars in Python files
+    let content: string;
+    try {
+      content = _readFileSync(file.path, 'latin1');
+    } catch { continue; }
+
+    // Feature detection (full file)
     for (const { pattern, feature } of featurePatterns) {
       if (pattern.test(content)) foundFeatures.add(feature);
     }
 
     // Route extraction
     for (const routePattern of routePatterns) {
-      const matches = [...content.matchAll(routePattern)];
-      for (const match of matches.slice(0, 5)) {
+      for (const match of [...content.matchAll(routePattern)].slice(0, 5)) {
         const route = match[2] || match[1];
-        if (route && route.length > 1 && !routes.includes(route)) {
-          routes.push(route);
-        }
+        if (route && route.length > 1 && !routes.includes(route)) routes.push(route);
+      }
+    }
+
+    // Python-specific deep extraction
+    if (file.extension === '.py') {
+      // Function names
+      const funcs = [...content.matchAll(/^def ([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gm)]
+        .map(m => m[1])
+        .filter(n => !n.startsWith('_'));
+      allFunctions.push(...funcs);
+
+      // Docstrings — first triple-quoted string after def
+      const docMatches = [...content.matchAll(/def [^\n]+\n\s+"""([\s\S]*?)"""/gm)]
+        .map(m => m[1].replace(/\s+/g, ' ').trim())
+        .filter(d => d.length > 20 && d.length < 300);
+      allDocstrings.push(...docMatches.slice(0, 5));
+
+      // UI section labels — strip emoji and non-ASCII, keep only readable text
+      const sectionMatches = [
+        ...content.matchAll(/section-hdr['">\s]*>(.*?)<\/div>/gi),
+        ...content.matchAll(/st\.markdown\s*\(\s*["']#+\s*([^"'\n#\\]+)/gi),
+        ...content.matchAll(/st\.header\s*\(\s*["']([^"']+)["']/gi),
+        ...content.matchAll(/st\.subheader\s*\(\s*["']([^"']+)["']/gi),
+      ].map(m => m[1]
+          .trim()
+          .replace(/<[^>]+>/g, '')       // strip HTML tags
+          .replace(/[^\x20-\x7E]/g, '')  // strip non-ASCII (emoji etc.)
+          .replace(/\\n.*/,'')
+          .trim()
+        )
+        .filter(s => s.length > 3 && s.length < 60);
+      allUISections.push(...sectionMatches.slice(0, 8));
+
+      // Tab names — strip non-ASCII
+      const tabMatch = content.match(/st\.tabs\s*\(\s*\[([^\]]+)\]/);
+      if (tabMatch) {
+        const tabs = tabMatch[1]
+          .replace(/[^\x20-\x7E,'"]/g, '') // strip non-ASCII
+          .replace(/['"]/g, '')
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean);
+        allUISections.push(...tabs);
+      }
+
+      // Use the most meaningful docstring as description
+      if (!inferredDescription && docMatches.length > 0) {
+        // Skip generic/trivial docstrings
+        const skipPhrases = /^(initialize|helper|utility|wrapper|create a|simple|basic)/i;
+        const mainDoc = docMatches.find(d => !skipPhrases.test(d) && d.length > 30);
+        inferredDescription = (mainDoc || docMatches[0]).trim();
+      }
+
+      // Fallback: extract from st.markdown hero text
+      if (!inferredDescription) {
+        const heroMatch = content.match(/hero-subtitle['">\s]*>(.*?)<\/div>/i);
+        if (heroMatch) inferredDescription = heroMatch[1].trim();
+      }
+    }
+
+    // TypeScript/JavaScript: extract JSDoc and component names
+    if (['.ts', '.tsx', '.js', '.jsx'].includes(file.extension)) {
+      const jsdocMatches = [...content.matchAll(/\/\*\*\s*([\s\S]*?)\*\//gm)]
+        .map(m => m[1].replace(/\s*\*\s?/g, ' ').trim())
+        .filter(d => d.length > 20 && d.length < 300);
+      allDocstrings.push(...jsdocMatches.slice(0, 3));
+
+      if (!inferredDescription && jsdocMatches.length > 0) {
+        inferredDescription = jsdocMatches[0];
       }
     }
   }
 
   analysis.codeFeatures = [...foundFeatures];
   analysis.apiRoutes = routes.slice(0, 20);
+  analysis.features = [...new Set([...analysis.features, ...analysis.codeFeatures])];
 
-  // Merge code features into main features list (deduplicated)
-  const allFeatures = new Set([...analysis.features, ...analysis.codeFeatures]);
-  analysis.features = [...allFeatures];
+  // Store rich context for AI prompts
+  (analysis as any)._codeContext = {
+    functions: [...new Set(allFunctions)].slice(0, 15),
+    docstrings: allDocstrings,
+    uiSections: [...new Set(allUISections)].slice(0, 10),
+    description: inferredDescription,
+  } as CodeContext;
+
+  // Use inferred description if none found
+  if (!analysis.description && inferredDescription) {
+    analysis.description = inferredDescription;
+  }
 }
 
 /**
