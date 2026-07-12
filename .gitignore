@@ -11,3 +11,10 @@ Thumbs.db
 resume/*.tex
 resume/*.pdf
 resume/*.backup-*.tex
+resume/*.aux
+resume/*.log
+resume/*.out
+resume/*.synctex.gz
+resume/*.toc
+resume/*.fls
+resume/*.fdb_latexmk
