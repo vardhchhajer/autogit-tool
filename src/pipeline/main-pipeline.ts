@@ -7,7 +7,7 @@ import { generateReadme, writeReadme, displayDiff, type ReadmeResult } from '../
 import { generateDocs, writeDocs, type DocFile } from '../services/docs-generator.js';
 import { getGitStatus, initGit, generateGitignore, stageAll, generateCommitMessage, commit, push, addRemote } from '../services/git-service.js';
 import { createRepo, getAuthenticatedUser, repoExists, generateTopics, isGitHubConfigured } from '../services/github-service.js';
-import { generateSocialContent, openLinkedInShare, openTwitterShare } from '../services/social-generator.js';
+import { generateSocialContent, openLinkedInShare, openTwitterShare, copyToClipboard } from '../services/social-generator.js';
 import { runResumeUpdate } from '../commands/resume.js';
 import { loadConfig } from '../config/manager.js';
 import { logger, spinner } from '../utils/logger.js';
@@ -378,7 +378,12 @@ async function handleSocialContent(
       default: true,
     }]);
     if (openLinkedIn) {
+      // Auto-copy the post text to clipboard so user can paste immediately
+      const copied = await copyToClipboard(linkedinText);
       await openLinkedInShare(url);
+      if (copied) {
+        logger.success('LinkedIn post copied to clipboard — just paste it into the share dialog');
+      }
     }
 
     const { openTwitter } = await inquirer.prompt([{

@@ -67,6 +67,38 @@ export async function openLinkedInShare(repoUrl: string): Promise<void> {
 }
 
 /**
+ * Copy text to the system clipboard cross-platform.
+ * Windows: clip, macOS: pbcopy, Linux: xclip or xsel
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    const { execSync } = await import('child_process');
+    const { platform } = await import('os');
+    const os = platform();
+
+    if (os === 'win32') {
+      // pipe through PowerShell to handle Unicode correctly
+      execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetText([System.Console]::In.ReadToEnd())"', {
+        input: text,
+        stdio: ['pipe', 'ignore', 'ignore'],
+      });
+    } else if (os === 'darwin') {
+      execSync('pbcopy', { input: text, stdio: ['pipe', 'ignore', 'ignore'] });
+    } else {
+      // Linux — try xclip then xsel
+      try {
+        execSync('xclip -selection clipboard', { input: text, stdio: ['pipe', 'ignore', 'ignore'] });
+      } catch {
+        execSync('xsel --clipboard --input', { input: text, stdio: ['pipe', 'ignore', 'ignore'] });
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Open X (Twitter) compose window with the tweet pre-filled.
  */
 export async function openTwitterShare(tweet: string, repoUrl: string): Promise<void> {

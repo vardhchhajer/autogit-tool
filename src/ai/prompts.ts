@@ -257,37 +257,32 @@ export function resumePromptWithCode(
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries]
     .filter(Boolean).join(', ');
 
-  return `You are a senior technical resume writer. Read EVERY LINE of the source code below. Understand what it actually does. Then write a LaTeX resume entry for ${ownerName}.
+  return `You are a senior software engineer writing resume bullets for ${ownerName}. Read the FULL source code below line by line. Understand the exact algorithms, data structures, integrations, and UI flows. Then write a LaTeX resume entry that is specific to THIS codebase — not generic.
 
 SOURCE CODE:
 ${code.content}
 
 ---
-PROJECT: ${displayName}
+PROJECT NAME: ${displayName}
 TECH STACK: ${techStack}
 
-REQUIREMENTS:
-1. Use this EXACT LaTeX structure:
+CRITICAL RULES:
+- Every bullet must reference something SPECIFIC from the code above
+- Name actual functions (e.g. calculate_shortage, build_pdf_report), algorithms (e.g. "8-step assorted/unassorted matching"), data structures, or integrations
+- Never write generic bullets like "Developed an application" or "Implemented features"
+- Use strong past-tense verbs: Engineered, Built, Implemented, Designed, Developed
+- Be technical — this resume targets software engineering roles
+
+REQUIRED LaTeX FORMAT (use exactly):
 \\resumeProjectHeading
-    {\\textbf{${displayName}} $|$ \\emph{Category}}{}
+    {\\textbf{${displayName}} $|$ \\emph{[Category based on what the code does]}}{}
     \\resumeItemListStart
-      \\resumeItem{Bullet 1}
-      \\resumeItem{Bullet 2}
-      \\resumeItem{Bullet 3}
+      \\resumeItem{[specific technical bullet about the core algorithm or main feature]}
+      \\resumeItem{[specific bullet about a secondary feature, UI, or integration]}
+      \\resumeItem{[specific bullet about data handling, storage, or output]}
       \\resumeItem{\\textbf{Tech Stack:} ${techStack}}
     \\resumeItemListEnd
 
-2. Write 3-5 bullets. Each bullet must reference SOMETHING SPECIFIC from the code:
-   - Name actual functions, algorithms, calculations, or data structures (e.g. "8-step fabric shortage algorithm")
-   - Reference real UI components or sections visible in the code
-   - Mention specific integrations, file formats, or data flows
-   - Use strong action verbs: Built, Engineered, Implemented, Designed, Developed
-   - Be technical and concrete — no vague bullets like "managed data" or "implemented features"
-
-3. Good example style:
-   \\resumeItem{Engineered a fabric shortage calculator using an 8-step assorted/unassorted matching algorithm that computes longation percentage and predicts bleach shortfall.}
-   \\resumeItem{Built PDF report generation using ReportLab with multi-table layouts, side-by-side breakdowns, and sorted unassorted data grids.}
-
-4. Last bullet MUST be: \\textbf{Tech Stack:} ${techStack}
-5. Return ONLY the LaTeX block — no explanation, no markdown fences.`;
+Write 3-5 \\resumeItem bullets. The last one must be the Tech Stack line.
+Return ONLY the LaTeX block. No commentary, no markdown fences, no explanation.`;
 }
