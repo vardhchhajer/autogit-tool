@@ -257,32 +257,136 @@ export function resumePromptWithCode(
   const techStack = [...analysis.languages, ...analysis.frameworks, ...analysis.libraries]
     .filter(Boolean).join(', ');
 
-  return `You are a senior software engineer writing resume bullets for ${ownerName}. Read the FULL source code below line by line. Understand the exact algorithms, data structures, integrations, and UI flows. Then write a LaTeX resume entry that is specific to THIS codebase — not generic.
+  return `You are a senior software engineer writing resume bullets for ${ownerName}. Your task is to read the source code below and write resume bullets that are SPECIFIC, TECHNICAL, and IMPRESSIVE — matching the quality of the examples below.
 
-SOURCE CODE:
+QUALITY EXAMPLES (these are the style and depth you must match):
+
+Example 1 — ERP system:
+\\resumeItem{Engineered a robust SQL Server-to-Cloud sync engine using \\texttt{pyodbc} and \\texttt{FastAPI} that performs real-time data extraction of sales orders, invoices, and ledger masters with read-only transaction isolation level settings.}
+\\resumeItem{Implemented a complex financial outstanding calculation engine that replicates \\texttt{PROC\\_OUTSTANDING} logic, accurately reconciling bill-wise receivables by aggregating \\texttt{PARTYDETAIL} bills against \\texttt{ADJMASTER} receipts and unallocated \\texttt{TRAN\\_DETAIL} credits.}
+
+Example 2 — CLI tool:
+\\resumeItem{Engineered a recursive project scanner using \\texttt{readdirSync} and \\texttt{statSync} to perform deep dependency analysis, identifying build systems, test frameworks, and environment variables across multi-directory architectures.}
+\\resumeItem{Developed a robust Git automation service using \\texttt{simple-git} that performs intelligent staging, generates conventional commit messages via diff analysis, and manages remote repository synchronization via the GitHub API.}
+
+Example 3 — Inventory system:
+\\resumeItem{Developed TSPL thermal printer integration (TSC TTP-244 Pro) via Windows Print Spooler (\\texttt{pywin32}), generating Code 39 barcodes across a 3-column label grid with sub-millimeter alignment calibration.}
+\\resumeItem{Engineered a global barcode scanner intercept using injected JavaScript that detects rapid keystroke patterns ($<$500ms) to distinguish scanner input from human typing, auto-redirecting to the usage page with pre-filled data.}
+
+---
+NOW READ THIS SOURCE CODE CAREFULLY:
+
 ${code.content}
 
 ---
-PROJECT NAME: ${displayName}
+PROJECT: ${displayName}
 TECH STACK: ${techStack}
 
-CRITICAL RULES:
-- Every bullet must reference something SPECIFIC from the code above
-- Name actual functions (e.g. calculate_shortage, build_pdf_report), algorithms (e.g. "8-step assorted/unassorted matching"), data structures, or integrations
-- Never write generic bullets like "Developed an application" or "Implemented features"
-- Use strong past-tense verbs: Engineered, Built, Implemented, Designed, Developed
-- Be technical — this resume targets software engineering roles
+WRITE THE RESUME ENTRY following these rules:
+1. Name ACTUAL functions, classes, algorithms, and data structures from the code (wrap in \\texttt{})
+2. Include numbers and specifics where visible (e.g. table counts, threshold values, timing constraints)
+3. Explain the WHY or technical challenge — not just what was built
+4. Use strong past-tense verbs: Engineered, Implemented, Developed, Designed, Built
+5. Each bullet should be 1-2 sentences, dense with technical detail
 
-REQUIRED LaTeX FORMAT (use exactly):
+REQUIRED FORMAT:
 \\resumeProjectHeading
-    {\\textbf{${displayName}} $|$ \\emph{[Category based on what the code does]}}{}
+    {\\textbf{${displayName}} $|$ \\emph{[category reflecting what the code does]}}{}
     \\resumeItemListStart
-      \\resumeItem{[specific technical bullet about the core algorithm or main feature]}
-      \\resumeItem{[specific bullet about a secondary feature, UI, or integration]}
-      \\resumeItem{[specific bullet about data handling, storage, or output]}
+      \\resumeItem{[most impressive/complex core feature]}
+      \\resumeItem{[second major feature or technical decision]}
+      \\resumeItem{[third feature — could be UI, data handling, or integration]}
       \\resumeItem{\\textbf{Tech Stack:} ${techStack}}
     \\resumeItemListEnd
 
-Write 3-5 \\resumeItem bullets. The last one must be the Tech Stack line.
-Return ONLY the LaTeX block. No commentary, no markdown fences, no explanation.`;
+Return ONLY the LaTeX block. No explanation, no markdown fences, no commentary.`;
+}
+
+/** Convert a plain-text resume extracted from PDF into a professional LaTeX file */
+export function pdfToLatexPrompt(resumeText: string, ownerInfo: {
+  name?: string;
+  email?: string;
+  website?: string;
+}): string {
+  const templatePreamble = `%-------------------------
+% Resume in LaTeX
+%-------------------------
+\\documentclass[letterpaper,11pt]{article}
+\\usepackage{latexsym}
+\\usepackage[empty]{fullpage}
+\\usepackage{titlesec}
+\\usepackage{marvosym}
+\\usepackage[usenames,dvipsnames]{color}
+\\usepackage{verbatim}
+\\usepackage{enumitem}
+\\usepackage[hidelinks]{hyperref}
+\\usepackage{fancyhdr}
+\\usepackage[english]{babel}
+\\usepackage{tabularx}
+\\usepackage{geometry}
+\\geometry{letterpaper,top=0.5in,bottom=0.5in,left=0.55in,right=0.55in}
+\\pagestyle{fancy}
+\\fancyhf{}
+\\fancyfoot{}
+\\renewcommand{\\headrulewidth}{0pt}
+\\renewcommand{\\footrulewidth}{0pt}
+\\urlstyle{same}
+\\raggedbottom
+\\raggedright
+\\setlength{\\tabcolsep}{0in}
+\\titleformat{\\section}{\\vspace{-4pt}\\scshape\\raggedright\\large}{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
+\\newcommand{\\resumeItem}[1]{\\item\\small{{#1 \\vspace{-2pt}}}}
+\\newcommand{\\resumeSubheading}[4]{
+  \\vspace{-2pt}\\item
+    \\begin{tabular*}{0.97\\textwidth}[t]{l@{\\extracolsep{\\fill}}r}
+      \\textbf{#1} & #2 \\\\
+      \\textit{\\small#3} & \\textit{\\small #4} \\\\
+    \\end{tabular*}\\vspace{-7pt}}
+\\newcommand{\\resumeProjectHeading}[2]{
+    \\item
+    \\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}
+      \\small#1 & #2 \\\\
+    \\end{tabular*}\\vspace{-7pt}}
+\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-4pt}}
+\\renewcommand\\labelitemii{$\\vcenter{\\hbox{\\tiny$\\bullet$}}$}
+\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.15in, label={}]}
+\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
+\\newcommand{\\resumeItemListStart}{\\begin{itemize}}
+\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-5pt}}`;
+
+  const name = ownerInfo.name || 'Your Name';
+  const email = ownerInfo.email || 'email@example.com';
+  const website = ownerInfo.website || '';
+
+  return `You are a LaTeX expert. Convert the resume text below into a professional LaTeX resume using the exact template structure provided.
+
+RESUME TEXT (extracted from PDF):
+---
+${resumeText}
+---
+
+TEMPLATE PREAMBLE TO USE (copy this exactly):
+${templatePreamble}
+
+INSTRUCTIONS:
+1. Use the template preamble above verbatim — do not change any \\newcommand or package definitions.
+2. For the heading section use:
+   \\begin{center}
+       {\\Huge \\scshape ${name}} \\\\ \\vspace{4pt}
+       \\small
+       \\href{mailto:${email}}{\\underline{${email}}} $|$
+       \\href{https://linkedin.com/in/...}{\\underline{linkedin.com/in/...}} $|$
+       \\href{https://github.com/...}{\\underline{github.com/...}}${website ? ` $|$\n       \\href{https://${website}}{\\underline{${website}}}` : ''}
+   \\end{center}
+3. Fill in the actual LinkedIn/GitHub/website URLs from the resume text if present.
+4. Map each section from the PDF to the correct LaTeX environment:
+   - Work experience → \\resumeSubheading{Company}{Location}{Title}{Dates} + \\resumeItemListStart/End
+   - Education → \\resumeSubheading{Institution}{Location}{Degree}{Dates}
+   - Projects → \\resumeProjectHeading{\\textbf{Name} $|$ \\emph{Type}}{} + \\resumeItemListStart/End
+   - Skills → \\begin{itemize} with \\textbf{Category}{: items} rows
+5. Preserve ALL content from the PDF — do not skip any section, job, project, or skill.
+6. For project bullets: keep them technical and specific. Use \\texttt{} for function names, libraries, and technical terms.
+7. End with \\end{document}.
+
+Return ONLY the complete LaTeX source code, nothing else. No explanation, no markdown fences.`;
 }

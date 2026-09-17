@@ -158,6 +158,8 @@ program
   .description('Update your LaTeX resume with the current project')
   .option('--setup', 'Configure resume file path and owner info')
   .option('--show', 'Show current resume configuration')
+  .option('--file <path>', 'Quickly set a new .tex resume file path')
+  .option('--from-pdf <path>', 'Convert a PDF resume to LaTeX format and set as resume')
   .option('--no-ai', 'Use template instead of AI for bullet generation')
   .action(async (opts) => {
     try { await cmdResume(opts); } catch (e: any) { handleError(e); }

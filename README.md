@@ -179,7 +179,11 @@ autogit resume               # update resume for current project
 autogit resume --no-ai       # use template bullets instead of AI
 autogit resume --show        # check configured path
 autogit resume --setup       # reconfigure
+autogit resume --file resume.tex         # use an existing LaTeX file
+autogit resume --from-pdf resume.pdf     # convert a text-based PDF to LaTeX
 ```
+
+PDF conversion extracts text locally, sends the extracted resume content to your configured AI provider, and writes a `.tex` file beside the PDF when that location is writable. Scanned, image-only PDFs require OCR first. Review the generated LaTeX before using it.
 
 The resume step runs automatically in the main pipeline. Skip it with:
 
