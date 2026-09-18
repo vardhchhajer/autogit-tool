@@ -37,7 +37,7 @@
   "homepage": "https://github.com/vardhchhajer/autogit-tool",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vardhchhajer/autogit-tool.git"
+    "url": "git+https://github.com/vardhchhajer/autogit-tool.git"
   },
   "bugs": {
     "url": "https://github.com/vardhchhajer/autogit-tool/issues"
