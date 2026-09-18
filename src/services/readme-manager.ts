@@ -3,9 +3,9 @@ import { join } from 'path';
 import { createPatch } from 'diff';
 import chalk from 'chalk';
 import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
-import { getProvider, type AIMessage } from '../ai/provider.js';
-import { readmeGenerationPromptWithCode, readmeGenerationPrompt } from '../ai/prompts.js';
-import { buildCodeSummary } from '../ai/code-reader.js';
+import { getProvider, type AIMessage, type AIProvider } from '../ai/provider.js';
+import { readmeGenerationPrompt } from '../ai/prompts.js';
+import { generateAgentReadme } from '../ai/readme-agent.js';
 import { logger, spinner } from '../utils/logger.js';
 import type { ScanResult } from '../scanner/file-scanner.js';
 
@@ -20,43 +20,51 @@ export async function generateReadme(
   rootDir: string,
   analysis: ProjectAnalysis,
   useAI: boolean,
-  scan?: ScanResult
+  scan?: ScanResult,
+  providerOverride?: AIProvider
 ): Promise<ReadmeResult> {
-  const { existsSync, readFileSync } = await import('fs');  const readmePath = analysis.readmePath || join(rootDir, 'README.md');
+  const readmePath = analysis.readmePath || join(rootDir, 'README.md');
   const existingContent = existsSync(readmePath) ? readFileSync(readmePath, 'utf-8') : null;
 
   let newContent: string;
 
   if (useAI) {
-    const spin = spinner('Reading source files for README generation...').start();
+    const spin = spinner('Inspecting project for README generation...').start();
     try {
-      const provider = getProvider();
+      const provider = providerOverride ?? getProvider();
 
-      let prompt: string;
       if (scan) {
-        const code = await buildCodeSummary(rootDir, scan);
-        spin.text = `Generating README from ${code.filesRead} source file(s)...`;
-        prompt = readmeGenerationPromptWithCode(analysis, code, existingContent || undefined);
+        newContent = await generateAgentReadme(analysis, scan, existingContent, provider);
+        if (existingContent !== null) {
+          const existingLinks = [...existingContent.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)]
+            .map(match => match[1]);
+          const missing = existingLinks.filter(link => !newContent.includes(link));
+          if (missing.length > 0) {
+            throw new Error(`Generated README omitted ${missing.length} existing link(s) or image(s)`);
+          }
+        }
       } else {
-        prompt = readmeGenerationPrompt(analysis, existingContent || undefined);
+        const prompt = readmeGenerationPrompt(analysis, existingContent || undefined);
+        const messages: AIMessage[] = [
+          { role: 'system', content: 'You are a professional technical documentation writer.' },
+          { role: 'user', content: prompt },
+        ];
+        const response = await provider.generate(messages, { temperature: 0.3, maxTokens: 8192 });
+        newContent = response.content.trim()
+          .replace(/^```(?:markdown|md)?\n?/i, '')
+          .replace(/\n?```$/i, '')
+          .trim();
       }
-
-      const messages: AIMessage[] = [
-        { role: 'system', content: 'You are a professional technical documentation writer. Read the code carefully before writing.' },
-        { role: 'user', content: prompt },
-      ];
-
-      const response = await provider.generate(messages, { temperature: 0.5, maxTokens: 8192 });
-      newContent = response.content.trim()
-        .replace(/^```(?:markdown|md)?\n?/i, '')
-        .replace(/\n?```$/i, '')
-        .trim();
-
-      spin.succeed('README generated from source code analysis');
+      spin.succeed('README generated from project inspection');
     } catch (error: any) {
       spin.fail('AI generation failed');
-      logger.warn(`Falling back to template: ${error.message}`);
-      newContent = generateTemplateReadme(analysis);
+      if (existingContent !== null) {
+        logger.warn(`Existing README left unchanged: ${error.message}`);
+        newContent = existingContent;
+      } else {
+        logger.warn(`Falling back to template: ${error.message}`);
+        newContent = generateTemplateReadme(analysis);
+      }
     }
   } else {
     newContent = generateTemplateReadme(analysis);
@@ -64,7 +72,7 @@ export async function generateReadme(
 
   // Generate diff
   let diff: string | null = null;
-  if (existingContent) {
+  if (existingContent !== null && existingContent !== newContent) {
     diff = createPatch('README.md', existingContent, newContent, 'existing', 'proposed');
   }
 

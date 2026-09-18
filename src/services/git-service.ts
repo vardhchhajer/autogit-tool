@@ -1,4 +1,4 @@
-import simpleGit, { type SimpleGit, type StatusResult } from 'simple-git';
+import simpleGit, { type StatusResult } from 'simple-git';
 import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { ProjectAnalysis } from '../scanner/project-analyzer.js';
@@ -15,6 +15,55 @@ export interface GitStatus {
   staged: string[];
   unstaged: string[];
   untracked: string[];
+}
+
+export interface CommitPlan {
+  branch: string | null;
+  remoteUrl: string | null;
+  staged: string[];
+  toStage: string[];
+  preservedUnstaged: string[];
+  sensitive: string[];
+}
+
+function looksSensitive(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/').toLowerCase();
+  const name = normalized.split('/').pop() || '';
+  if (/^\.env(?:\.|$)/.test(name) && !/\.(example|sample|template)$/.test(name)) return true;
+  return /(^|\/)(\.npmrc|\.pypirc|credentials(?:\.json)?|secrets?(?:\.json)?|id_rsa|id_ed25519)$/.test(normalized) ||
+    /\.(pem|p12|pfx|key)$/.test(name);
+}
+
+export async function getCommitPlan(rootDir: string): Promise<CommitPlan> {
+  const git = simpleGit(rootDir);
+  const status = await git.status();
+  const remotes = await git.getRemotes(true);
+  const origin = remotes.find(remote => remote.name === 'origin');
+  const staged = status.files.filter(file => file.index !== ' ' && file.index !== '?')
+    .map(file => file.path);
+  const toStage = status.files.filter(file => file.index === '?' ||
+    (file.index === ' ' && file.working_dir !== ' '))
+    .map(file => file.path);
+  const preservedUnstaged = status.files.filter(file =>
+    file.index !== ' ' && file.index !== '?' && file.working_dir !== ' '
+  ).map(file => file.path);
+  return {
+    branch: status.current,
+    remoteUrl: origin?.refs.push || null,
+    staged,
+    toStage,
+    preservedUnstaged,
+    sensitive: [...new Set([...staged, ...toStage].filter(looksSensitive))],
+  };
+}
+
+export async function stageCommitPlan(rootDir: string, plan: CommitPlan): Promise<void> {
+  if (plan.toStage.length === 0) return;
+  await simpleGit(rootDir).raw(['add', '-A', '--', ...plan.toStage]);
+}
+
+export async function getStagedSummary(rootDir: string): Promise<string> {
+  return simpleGit(rootDir).diff(['--cached', '--stat']);
 }
 
 export async function getGitStatus(rootDir: string): Promise<GitStatus> {
@@ -178,23 +227,25 @@ export async function generateCommitMessage(rootDir: string, useAI: boolean): Pr
   }
 }
 
-export async function commit(rootDir: string, message: string): Promise<void> {
+export async function commit(rootDir: string, message: string): Promise<boolean> {
   const git = simpleGit(rootDir);
   const status = await git.status();
 
   // Nothing staged — skip commit silently instead of throwing
   if (status.staged.length === 0) {
     logger.dimmed('Nothing to commit — working tree clean');
-    return;
+    return false;
   }
 
   await git.commit(message);
+  return true;
 }
 
 export async function push(rootDir: string, branch?: string): Promise<void> {
   const git = simpleGit(rootDir);
   const status = await git.status();
-  const currentBranch = branch || status.current || 'main';
+  const currentBranch = branch || status.current;
+  if (!currentBranch) throw new Error('Cannot push from a detached HEAD or unnamed branch');
 
   try {
     await git.push('origin', currentBranch, ['--set-upstream']);
@@ -213,7 +264,7 @@ export async function addRemote(rootDir: string, url: string): Promise<void> {
   const remotes = await git.getRemotes();
 
   if (remotes.some(r => r.name === 'origin')) {
-    await git.remote(['set-url', 'origin', url]);
+    throw new Error('Origin remote already exists; refusing to replace it');
   } else {
     await git.addRemote('origin', url);
   }

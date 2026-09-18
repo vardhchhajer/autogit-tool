@@ -25,8 +25,11 @@ When you run `autogit` inside a project directory it:
 5. Stages, commits, and pushes to GitHub — creating the repository if it doesn't exist
 6. Updates your LaTeX resume with an AI-written project entry
 7. Generates a LinkedIn post, X (Twitter) post, DEV.to draft, and resume bullet
+8. Saves a share package with a sourced LinkedIn post, text drafts, evidence, and three PNG cards; offers a Brag video when its optional setup is installed
 
-Everything is previewed and requires confirmation before writing. Pass `--yes` to skip all prompts.
+The share package is saved under `~/.autogit/social/<project>/`. LinkedIn publishing and image upload still require your review. Destructive or public-facing Git actions require confirmation; pass `--yes` to skip prompts.
+
+The main run creates three evidence cards automatically. It can also add a real screenshot from a running web app with `autogit --screenshot-url http://localhost:3000`, or conceptual artwork with `autogit --promo-image` when OpenAI image generation is configured. Interactive runs offer these choices after the share package is created.
 
 ---
 
@@ -40,6 +43,10 @@ npm install -g autogit-tool
 
 **Requirements:** Node.js 18+, Git
 
+On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, then whether to include Brag (**Yes** preselected), and finally which AI provider to use. AutoGit then installs a matching coding agent and its Brag skill: Codex for OpenAI, Claude Code for Anthropic, or OpenCode for other providers. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
+
+The optional Brag step installs a matching agent and its skill globally. Run `autogit brag` from a project folder to start the video workflow. AutoGit passes the selected AI credential only to that agent process; it does not copy the key into the agent's settings. During opted-in setup, AutoGit installs Node 22 and FFmpeg into its user-data folder if needed; Brag uses `npx hyperframes` to fetch its renderer on first use. The managed FFmpeg binary is a third-party GPL-licensed component. The image-card showcase works without those video tools. Azure OpenAI is not yet mapped to the OpenCode runner.
+
 ---
 
 ## Quick start
@@ -48,11 +55,11 @@ npm install -g autogit-tool
 # 1. Go to any project folder
 cd my-project
 
-# 2. Set up your GitHub token (first time only)
-autogit login
+# 2. First run opens the Default/Customize and AI setup wizard
+autogit setup
 
-# 3. Set up your AI provider (first time only)
-autogit config
+# 3. Set up your GitHub token (first time only)
+autogit login
 
 # 4. Run
 autogit
@@ -80,7 +87,11 @@ AutoGit supports 13 AI providers. Configure via `autogit config` or environment 
 | **Ollama** | `OLLAMA_ENDPOINT` | `llama3.1` | ✔ Local |
 | **Azure OpenAI** | `AZURE_OPENAI_KEY` | your deployment | — |
 | **NVIDIA NIM** | `NVIDIA_API_KEY` | `meta/llama-3.3-70b-instruct` | ✔ Free credits |
-| **Custom** | `CUSTOM_API_KEY` | your model | — |
+| **Cerebras** | `CEREBRAS_API_KEY` | `gpt-oss-120b` | — |
+| **DeepInfra** | `DEEPINFRA_API_KEY` | `deepseek-ai/DeepSeek-V3.2` | — |
+| **Hugging Face Inference** | `HUGGINGFACE_API_KEY` or `HF_TOKEN` | `openai/gpt-oss-120b:fastest` | ✔ Limited |
+| **Fireworks AI** | `FIREWORKS_API_KEY` | `accounts/fireworks/models/llama-v3p1-8b-instruct` | — |
+| **Custom OpenAI-compatible** | `CUSTOM_API_KEY` | your model | — |
 
 **Recommended for free usage:** [Groq](https://console.groq.com) — fastest free API, no credit card required. [NVIDIA NIM](https://build.nvidia.com) also provides free credits on signup.
 
@@ -116,6 +127,10 @@ set GROQ_API_KEY=gsk_your_key_here
 ```bash
 autogit config --test
 ```
+
+### Custom endpoint
+
+Choose **custom** in `autogit config` to use any service that implements the OpenAI chat-completions API. Enter its base endpoint, model name, and API key. The key is optional for local servers such as LM Studio, LocalAI, vLLM, and llama.cpp. The same endpoint, model, and key are passed to OpenCode for the optional Brag workflow; credentials are not saved in OpenCode.
 
 ---
 
@@ -197,19 +212,47 @@ autogit --skip-resume
 
 | Command | Description |
 |---|---|
-| `autogit` | Full pipeline: scan → docs → resume → commit → push → social |
+| `autogit` | Full pipeline: scan → docs → resume → commit → push → share package, with optional Brag video |
 | `autogit init` | Initialize Git and generate `.gitignore` |
 | `autogit docs` | Generate `PROJECT_SUMMARY.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md` |
 | `autogit readme` | Generate or update README only |
 | `autogit publish` | Commit and push to GitHub |
 | `autogit github` | Create GitHub repository |
 | `autogit linkedin` | Generate all social content (short/medium/long LinkedIn, Twitter, DEV.to, resume bullet) |
+| `autogit setup` | Configure defaults, optional Brag skill, and AI provider |
+| `autogit brag` | Run Brag video creation with the matched coding agent |
+| `autogit showcase` | Create a sourced project post and three LinkedIn-ready PNG cards |
 | `autogit release` | Create a GitHub release with tag and notes |
 | `autogit resume` | Update LaTeX resume with current project |
 | `autogit analyze` | Project score card: documentation, code quality, maintainability |
 | `autogit doctor` | Check that Git, Node.js, GitHub token, and AI keys are all working |
 | `autogit config` | Interactive configuration wizard |
 | `autogit login` | Authenticate with GitHub |
+
+---
+
+## Publishing Safely
+
+Before committing, AutoGit shows files already staged, files it plans to stage, the current branch, and the `origin` remote. Partially staged files keep their staged version; their remaining edits stay unstaged. Obvious credential files such as `.env` and private keys stop the commit. A failed push returns an error, while the local commit remains available to retry.
+
+If `origin` exists, AutoGit pushes there without changing its URL or requiring a GitHub API token. If there is no remote, AutoGit can create a new repository; new repositories are private by default unless `--public` or a saved public visibility default is specified. If a same-named repository already exists, AutoGit asks you to set `origin` yourself so it cannot choose the wrong destination. `--yes` skips prompts but does not bypass the credential-file check.
+
+---
+
+## LinkedIn Images
+
+For any project, including a CLI, API, library, or data project, run `autogit showcase`. It detects the project type, uses traceable project facts, and saves a post, three PNG cards, editable SVG versions, and an `evidence.json` file under `~/.autogit/social/<project>/showcase-<timestamp>/`. Review the draft before sharing. It never runs project commands or invents terminal output, performance results, or a UI screenshot. The PNG renderer is included in AutoGit's npm dependencies; no coding agent, browser, FFmpeg, or Hyperframes installation is required. Use `autogit showcase --no-ai` for a factual offline template. Videos are not generated by this command.
+
+Run `autogit linkedin` and choose a real screenshot, conceptual promotional artwork, or both. Images are saved under AutoGit's user data directory and must be uploaded in LinkedIn's composer; opening the share dialog does not attach local image files.
+
+```bash
+autogit linkedin --screenshot-url http://localhost:3000
+autogit linkedin --promo-image
+autogit linkedin --showcase-cards
+autogit linkedin --screenshot-url http://localhost:3000 --promo-image "minimal product illustration"
+```
+
+Screenshots capture a running web app using Chrome, Edge, or Chromium installed on the computer. Promotional artwork uses the OpenAI image API when OpenAI is the selected AI provider; other providers are not switched automatically. Set an image model with `autogit config --set ai.imageModel=gpt-image-1.5` or `AUTOGIT_IMAGE_MODEL`; the default is `gpt-image-1.5`. Artwork is conceptual and should not be presented as a screenshot of the app.
 
 ---
 
@@ -316,6 +359,12 @@ autogit --no-ai
 
 README, docs, commit messages, resume entries, and social posts are all generated from templates based on the project analysis. Quality is lower but it works offline with no API keys.
 
+### Project-aware README generation
+
+With an AI provider configured, `autogit readme` inspects the current project in several steps. It can search the project file list and read relevant source and configuration files before drafting. AutoGit shows the proposed README or a diff and asks before writing. No separate coding-agent program is required; the feature uses AutoGit's existing AI provider configuration.
+
+Sensitive files such as `.env`, private keys, and lockfiles are excluded from this inspection. If AI generation fails or no provider is configured while a README already exists, AutoGit leaves that file unchanged. For a new project, it falls back to a template. Use `autogit readme --no-ai` to request template generation explicitly.
+
 ---
 
 ## Contributing
@@ -335,6 +384,7 @@ npm link             # install autogit globally from this local folder
 | Script | What it does |
 |---|---|
 | `npm run build` | Compile TypeScript to `dist/` (required before running) |
+| `npm test` | Build and run the README agent tests |
 | `npm run dev` | Watch mode — recompiles automatically on every file save |
 | `npm start` | Run the CLI directly via `node dist/cli.js` |
 | `npm run lint` | Run ESLint across `src/` |

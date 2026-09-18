@@ -1,12 +1,18 @@
-import { resolve } from 'path';
+import { join, resolve } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { generateSocialContent, openLinkedInShare, openTwitterShare, copyToClipboard } from '../services/social-generator.js';
+import { captureProjectScreenshot, defaultSocialImagePath, generatePromotionalArtwork } from '../services/social-images.js';
+import { collectShowcaseFacts } from '../services/showcase.js';
+import { saveShowcaseCards } from '../services/showcase-cards.js';
+import { getConfigDir } from '../utils/platform.js';
+import { getGitStatus } from '../services/git-service.js';
+import { remoteWebUrl } from '../services/publish-workflow.js';
 import { logger } from '../utils/logger.js';
 
-export async function cmdLinkedin(opts: { ai?: boolean }): Promise<void> {
+export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; promoImage?: boolean | string; showcaseCards?: boolean }): Promise<void> {
   const rootDir = resolve(process.cwd());
 
   logger.header('Social Media Content');
@@ -18,11 +24,13 @@ export async function cmdLinkedin(opts: { ai?: boolean }): Promise<void> {
   const content = await generateSocialContent(analysis, useAI);
 
   // Replace GitHub link placeholder
-  const repoUrl = `https://github.com/vardhchhajer/${analysis.name}`;
-  const shortPost  = content.linkedin.short.replace(/\[GITHUB_LINK\]/g, repoUrl);
-  const mediumPost = content.linkedin.medium.replace(/\[GITHUB_LINK\]/g, repoUrl);
-  const longPost   = content.linkedin.long.replace(/\[GITHUB_LINK\]/g, repoUrl);
-  const tweetText  = content.twitter.replace(/\[GITHUB_LINK\]/g, repoUrl);
+  const gitStatus = await getGitStatus(rootDir);
+  const repoUrl = gitStatus.remoteUrl ? remoteWebUrl(gitStatus.remoteUrl) : undefined;
+  const linkText = repoUrl || '[ADD_PROJECT_URL]';
+  const shortPost  = content.linkedin.short.replace(/\[GITHUB_LINK\]/g, linkText);
+  const mediumPost = content.linkedin.medium.replace(/\[GITHUB_LINK\]/g, linkText);
+  const longPost   = content.linkedin.long.replace(/\[GITHUB_LINK\]/g, linkText);
+  const tweetText  = content.twitter.replace(/\[GITHUB_LINK\]/g, linkText);
 
   // Show all versions
   logger.blank();
@@ -55,6 +63,58 @@ export async function cmdLinkedin(opts: { ai?: boolean }): Promise<void> {
 
   logger.blank();
 
+  let screenshotUrl = opts.screenshotUrl;
+  let promoImage = opts.promoImage;
+  let showcaseCards = opts.showcaseCards;
+  if (!screenshotUrl && !promoImage && !showcaseCards) {
+    const answer = await inquirer.prompt<{ imageChoice: string }>([{
+      type: 'list', name: 'imageChoice', message: 'Create an image for this post?',
+      choices: [
+        { name: 'No image', value: 'none' },
+        { name: 'Real app screenshot', value: 'screenshot' },
+        { name: 'Conceptual promotional artwork', value: 'artwork' },
+        { name: 'Project evidence cards (works for CLI/API/library too)', value: 'cards' },
+        { name: 'Both', value: 'both' },
+      ], default: 'none',
+    }]);
+    if (answer.imageChoice === 'screenshot' || answer.imageChoice === 'both') {
+      const urlAnswer = await inquirer.prompt<{ url: string }>([{
+        type: 'input', name: 'url', message: 'Running app URL:',
+        validate: value => /^https?:\/\//i.test(value) || 'Enter an http:// or https:// URL',
+      }]);
+      screenshotUrl = urlAnswer.url;
+    }
+    if (answer.imageChoice === 'artwork' || answer.imageChoice === 'both') promoImage = true;
+    if (answer.imageChoice === 'cards') showcaseCards = true;
+  }
+
+  if (screenshotUrl) {
+    try {
+      const path = defaultSocialImagePath(analysis, 'screenshot');
+      await captureProjectScreenshot(screenshotUrl, path);
+      logger.success(`Screenshot saved: ${path}`);
+    } catch (error: any) {
+      logger.warn(`Screenshot unavailable: ${error.message}`);
+    }
+  }
+  if (promoImage) {
+    try {
+      const path = defaultSocialImagePath(analysis, 'artwork');
+      await generatePromotionalArtwork(analysis, path, typeof promoImage === 'string' ? promoImage : undefined);
+      logger.success(`Promotional artwork saved: ${path}`);
+    } catch (error: any) {
+      logger.warn(`Promotional artwork unavailable: ${error.message}`);
+    }
+  }
+  if (showcaseCards) {
+    const base = collectShowcaseFacts(rootDir, scan, analysis);
+    const slug = analysis.name.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '') || 'project';
+    const directory = join(getConfigDir(), 'social', slug, `cards-${Date.now()}`);
+    const cards = await saveShowcaseCards({ ...base, post: '' }, directory);
+    logger.success(`${cards.png.length} evidence cards saved: ${directory}`);
+  }
+  if (screenshotUrl || promoImage || showcaseCards) logger.dimmed('Upload the saved image manually when composing your LinkedIn post.');
+
   // Ask which version to copy + open
   const { version } = await inquirer.prompt<{ version: string }>([{
     type: 'list',
@@ -85,7 +145,8 @@ export async function cmdLinkedin(opts: { ai?: boolean }): Promise<void> {
       message: 'Open LinkedIn share dialog in browser?',
       default: true,
     }]);
-    if (openBrowser) await openLinkedInShare(repoUrl);
+    if (openBrowser && repoUrl) await openLinkedInShare(repoUrl);
+    else if (openBrowser) logger.warn('No repository URL found. Add a project URL to the post before sharing.');
   }
 
   // Twitter
@@ -98,6 +159,6 @@ export async function cmdLinkedin(opts: { ai?: boolean }): Promise<void> {
   if (copyTweet) {
     const copied = await copyToClipboard(tweetText);
     if (copied) logger.success('Tweet copied to clipboard ✔');
-    await openTwitterShare(tweetText, repoUrl);
+    await openTwitterShare(tweetText, repoUrl || '');
   }
 }

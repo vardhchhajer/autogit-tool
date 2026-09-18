@@ -20,6 +20,10 @@ const SECRET_PATHS = [
   'ai.cohereKey',
   'ai.xaiKey',
   'ai.azureOpenAIKey',
+  'ai.cerebrasKey',
+  'ai.deepinfraKey',
+  'ai.huggingfaceKey',
+  'ai.fireworksKey',
 ];
 
 // Non-secret fields (shown as plain text, never masked)
@@ -59,6 +63,10 @@ const PROVIDER_FIELDS: Record<
   nvidia: [
     { label: 'NVIDIA NIM API Key (from build.nvidia.com)', key: 'nvidiaKey', hint: 'NVIDIA_API_KEY' },
   ],
+  cerebras:    [{ label: 'Cerebras API Key', key: 'cerebrasKey', hint: 'CEREBRAS_API_KEY' }],
+  deepinfra:   [{ label: 'DeepInfra API Key', key: 'deepinfraKey', hint: 'DEEPINFRA_API_KEY' }],
+  huggingface: [{ label: 'Hugging Face token', key: 'huggingfaceKey', hint: 'HUGGINGFACE_API_KEY or HF_TOKEN' }],
+  fireworks:   [{ label: 'Fireworks API Key', key: 'fireworksKey', hint: 'FIREWORKS_API_KEY' }],
   custom: [
     { label: 'API endpoint  (e.g. http://localhost:1234/v1 or https://myapi.com/v1)', key: 'customEndpoint', hint: 'CUSTOM_API_ENDPOINT' },
     { label: 'API key  (leave blank for local servers with no auth)',                  key: 'customKey',      hint: 'CUSTOM_API_KEY' },
@@ -130,7 +138,7 @@ async function interactiveConfig(): Promise<void> {
   if (section === 'defaults') { await configureDefaults(); return; }
 }
 
-async function configureAI(): Promise<void> {
+export async function configureAI(): Promise<void> {
   const config = loadConfig();
   config.ai = config.ai ?? {};
 
@@ -261,7 +269,7 @@ async function configureGitHub(): Promise<void> {
   }
 }
 
-async function configureDefaults(): Promise<void> {
+export async function configureDefaults(): Promise<void> {
   const config = loadConfig();
   config.defaults = config.defaults ?? {};
 
@@ -444,6 +452,10 @@ function debugConfig(): void {
     ['xaiKey',         ai.xaiKey],
     ['azureOpenAIKey', ai.azureOpenAIKey],
     ['nvidiaKey',      ai.nvidiaKey],
+    ['cerebrasKey',    ai.cerebrasKey],
+    ['deepinfraKey',   ai.deepinfraKey],
+    ['huggingfaceKey', ai.huggingfaceKey],
+    ['fireworksKey',   ai.fireworksKey],
     ['customKey',      ai.customKey],
   ];
 
@@ -479,6 +491,10 @@ function debugConfig(): void {
     cohere:     process.env.COHERE_API_KEY       || ai.cohereKey,
     xai:        process.env.XAI_API_KEY          || ai.xaiKey,
     nvidia:     process.env.NVIDIA_API_KEY       || ai.nvidiaKey,
+    cerebras:   process.env.CEREBRAS_API_KEY     || ai.cerebrasKey,
+    deepinfra:  process.env.DEEPINFRA_API_KEY    || ai.deepinfraKey,
+    huggingface: process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || ai.huggingfaceKey,
+    fireworks:  process.env.FIREWORKS_API_KEY    || ai.fireworksKey,
     custom:     process.env.CUSTOM_API_KEY       || ai.customKey,
   };
   const usedKey = activeKey[activeProvider];

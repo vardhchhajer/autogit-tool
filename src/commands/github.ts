@@ -4,13 +4,21 @@ import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { createRepo, getAuthenticatedUser, repoExists, generateTopics, isGitHubConfigured } from '../services/github-service.js';
-import { addRemote } from '../services/git-service.js';
+import { addRemote, getGitStatus } from '../services/git-service.js';
+import { loadConfig } from '../config/manager.js';
 import { logger } from '../utils/logger.js';
 
-export async function cmdGithub(opts: { create?: boolean; private?: boolean }): Promise<void> {
+export async function cmdGithub(opts: { create?: boolean; private?: boolean; public?: boolean }): Promise<void> {
   const rootDir = resolve(process.cwd());
 
   logger.header('GitHub');
+
+  const status = await getGitStatus(rootDir);
+  if (!status.isRepo) throw new Error('Not a Git repository. Run "autogit init" first.');
+  if (status.hasRemote) {
+    logger.info(`Using existing origin: ${status.remoteUrl}`);
+    return;
+  }
 
   if (!isGitHubConfigured()) {
     logger.error('GitHub not configured. Run "autogit login" or set GITHUB_TOKEN');
@@ -41,10 +49,11 @@ export async function cmdGithub(opts: { create?: boolean; private?: boolean }): 
   }
 
   const topics = generateTopics(analysis);
+  const isPrivate = opts.private === true || (opts.public !== true && loadConfig().defaults?.visibility !== 'public');
   const repo = await createRepo({
     name: analysis.name,
     description: analysis.description || `${analysis.languages[0] || ''} project`,
-    isPrivate: opts.private ?? false,
+    isPrivate,
     topics,
   });
 

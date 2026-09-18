@@ -45,15 +45,25 @@ export type AIProviderName =
   | 'xai'
   | 'azure-openai'
   | 'nvidia'
+  | 'cerebras'
+  | 'deepinfra'
+  | 'huggingface'
+  | 'fireworks'
   | 'custom';
 
 export interface AutoGitConfig {
+  setup?: {
+    completed?: boolean;
+    brag?: 'installed' | 'skipped' | 'failed';
+    agent?: 'codex' | 'claude-code' | 'opencode';
+  };
   github?: {
     token?: string;
   };
   ai?: {
     provider?: AIProviderName;
     model?: string;
+    imageModel?: string;
     // Original 5
     openaiKey?: string;
     anthropicKey?: string;
@@ -75,6 +85,11 @@ export interface AutoGitConfig {
     azureOpenAIApiVersion?: string;
     // NVIDIA NIM
     nvidiaKey?: string;
+    // OpenAI-compatible hosted providers
+    cerebrasKey?: string;
+    deepinfraKey?: string;
+    huggingfaceKey?: string;
+    fireworksKey?: string;
     // Custom OpenAI-compatible endpoint
     customKey?: string;
     customEndpoint?: string;    // e.g. http://localhost:8080/v1
@@ -158,6 +173,10 @@ function writeDotEnv(config: AutoGitConfig): void {
     ['XAI_API_KEY',           ai.xaiKey],
     ['AZURE_OPENAI_KEY',      ai.azureOpenAIKey],
     ['NVIDIA_API_KEY',        ai.nvidiaKey],
+    ['CEREBRAS_API_KEY',      ai.cerebrasKey],
+    ['DEEPINFRA_API_KEY',     ai.deepinfraKey],
+    ['HUGGINGFACE_API_KEY',   ai.huggingfaceKey],
+    ['FIREWORKS_API_KEY',     ai.fireworksKey],
     ['CUSTOM_API_KEY',        ai.customKey],
     ['CUSTOM_API_ENDPOINT',   ai.customEndpoint],
     ['CUSTOM_MODEL_NAME',     ai.customModelName],
@@ -202,6 +221,7 @@ export function getAIConfig() {
     // Active provider + model
     provider: (process.env.AUTOGIT_AI_PROVIDER || ai.provider || 'openai') as AIProviderName,
     model: process.env.AUTOGIT_AI_MODEL || ai.model,
+    imageModel: process.env.AUTOGIT_IMAGE_MODEL || ai.imageModel,
 
     // Original providers
     openaiKey:      process.env.OPENAI_API_KEY       || ai.openaiKey,
@@ -227,6 +247,10 @@ export function getAIConfig() {
 
     // NVIDIA NIM
     nvidiaKey:      process.env.NVIDIA_API_KEY  || ai.nvidiaKey,
+    cerebrasKey:    process.env.CEREBRAS_API_KEY || ai.cerebrasKey,
+    deepinfraKey:   process.env.DEEPINFRA_API_KEY || ai.deepinfraKey,
+    huggingfaceKey: process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || ai.huggingfaceKey,
+    fireworksKey:   process.env.FIREWORKS_API_KEY || ai.fireworksKey,
 
     // Custom OpenAI-compatible endpoint
     customKey:       process.env.CUSTOM_API_KEY      || ai.customKey,

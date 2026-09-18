@@ -10,12 +10,15 @@ import { cmdReadme } from './commands/readme.js';
 import { cmdPublish } from './commands/publish.js';
 import { cmdGithub } from './commands/github.js';
 import { cmdLinkedin } from './commands/linkedin.js';
+import { cmdShowcase } from './commands/showcase.js';
 import { cmdRelease } from './commands/release.js';
 import { cmdAnalyze } from './commands/analyze.js';
 import { cmdDoctor } from './commands/doctor.js';
 import { cmdConfig } from './commands/config.js';
 import { cmdLogin } from './commands/login.js';
 import { cmdResume } from './commands/resume.js';
+import { cmdSetup, shouldRunFirstSetup } from './commands/setup.js';
+import { cmdBrag } from './commands/brag.js';
 import { createRequire } from 'module';
 import { registerOctokitReset } from './config/manager.js';
 import { resetOctokitCache } from './services/github-service.js';
@@ -42,6 +45,8 @@ program
   .option('--skip-linkedin', 'Skip LinkedIn post generation')
   .option('--skip-github', 'Skip GitHub operations')
   .option('--skip-resume', 'Skip resume auto-update')
+  .option('--screenshot-url <url>', 'Capture a real app screenshot for the share package')
+  .option('--promo-image', 'Generate conceptual promotional artwork for the share package')
   .option('--no-ai', 'Disable AI-powered generation')
   .option('--force', 'Force overwrite existing files')
   .option('--regenerate', 'Regenerate existing documentation')
@@ -55,6 +60,8 @@ program
         skipLinkedin: opts.skipLinkedin,
         skipGithub: opts.skipGithub,
         skipResume: opts.skipResume,
+        screenshotUrl: opts.screenshotUrl,
+        promoImage: opts.promoImage,
         noAI: !opts.ai,
         force: opts.force,
         regenerate: opts.regenerate,
@@ -64,6 +71,28 @@ program
     } catch (error: any) {
       handleError(error);
     }
+  });
+
+program.hook('preAction', async (_command, action) => {
+  if (action.name() === 'setup') return;
+  if (program.opts().yes) return;
+  if (shouldRunFirstSetup(!!process.stdin.isTTY && !!process.stdout.isTTY)) {
+    try { await cmdSetup(); } catch (e: any) { handleError(e); }
+  }
+});
+
+program
+  .command('setup')
+  .description('Choose default or custom setup, Brag, and AI provider')
+  .action(async () => {
+    try { await cmdSetup(); } catch (e: any) { handleError(e); }
+  });
+
+program
+  .command('brag')
+  .description('Create a Brag launch video with the matched coding agent')
+  .action(async () => {
+    try { await cmdBrag(); } catch (e: any) { handleError(e); }
   });
 
 program
@@ -105,6 +134,7 @@ program
   .description('GitHub repository operations')
   .option('--create', 'Create repository')
   .option('--private', 'Private repository')
+  .option('--public', 'Public repository')
   .action(async (opts) => {
     try { await cmdGithub(opts); } catch (e: any) { handleError(e); }
   });
@@ -113,8 +143,19 @@ program
   .command('linkedin')
   .description('Generate LinkedIn posts')
   .option('--no-ai', 'Use template generation')
+  .option('--screenshot-url <url>', 'Capture a real screenshot of a running app')
+  .option('--promo-image [direction]', 'Generate conceptual promotional artwork')
+  .option('--showcase-cards', 'Create project evidence cards for the post')
   .action(async (opts) => {
-    try { await cmdLinkedin(opts); } catch (e: any) { handleError(e); }
+    try { await cmdLinkedin({ ...opts, ai: opts.ai !== false && program.opts().ai !== false }); } catch (e: any) { handleError(e); }
+  });
+
+program
+  .command('showcase')
+  .description('Create a sourced project post and shareable image cards')
+  .option('--no-ai', 'Use a factual template instead of AI')
+  .action(async (opts) => {
+    try { await cmdShowcase({ ...opts, ai: opts.ai !== false && program.opts().ai !== false }); } catch (e: any) { handleError(e); }
   });
 
 program

@@ -5,11 +5,16 @@ import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject, type ProjectAnalysis } from '../scanner/project-analyzer.js';
 import { generateReadme, writeReadme, displayDiff, type ReadmeResult } from '../services/readme-manager.js';
 import { generateDocs, writeDocs, type DocFile } from '../services/docs-generator.js';
-import { getGitStatus, initGit, generateGitignore, stageAll, generateCommitMessage, commit, push, addRemote } from '../services/git-service.js';
-import { createRepo, getAuthenticatedUser, repoExists, generateTopics, isGitHubConfigured } from '../services/github-service.js';
+import { getGitStatus, initGit, generateGitignore, getCommitPlan } from '../services/git-service.js';
+import { runCommitWorkflow } from '../services/commit-workflow.js';
+import { runPublishWorkflow } from '../services/publish-workflow.js';
 import { generateSocialContent, openLinkedInShare, openTwitterShare, copyToClipboard } from '../services/social-generator.js';
 import { runResumeUpdate } from '../commands/resume.js';
 import { loadConfig } from '../config/manager.js';
+import { createSharePackage } from '../services/share-package.js';
+import { runBragInProject, selectBragAgent } from '../services/brag-agent.js';
+import { captureProjectScreenshot, generatePromotionalArtwork } from '../services/social-images.js';
+import { join } from 'path';
 import { logger, spinner } from '../utils/logger.js';
 
 export interface PipelineOptions {
@@ -24,6 +29,8 @@ export interface PipelineOptions {
   regenerate?: boolean;
   private?: boolean;
   public?: boolean;
+  screenshotUrl?: string;
+  promoImage?: boolean;
 }
 
 export async function runMainPipeline(options: PipelineOptions): Promise<void> {
@@ -54,6 +61,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
 
   const useAI = !options.noAI;
   let resolvedRepoUrl: string | undefined;
+  let published = false;
 
   // Step 3: README
   let readmeResult: ReadmeResult | null = null;
@@ -62,7 +70,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   }
 
   // Step 4: Additional documentation
-  const docs = await handleDocs(rootDir, analysis, scan, useAI, options);
+  await handleDocs(rootDir, analysis, scan, useAI, options);
 
   // Step 5: Resume auto-update — runs AFTER git init but BEFORE commit
   // so the updated resume can be included in the same commit
@@ -73,20 +81,22 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   }
 
   // Step 6: Git operations
-  await handleGit(rootDir, analysis, readmeResult, docs, useAI, options);
+  const canPublish = await handleGit(rootDir, analysis, useAI, options);
 
   // Step 7: GitHub
-  if (!options.skipGithub) {
-    resolvedRepoUrl = await handleGitHub(rootDir, analysis, options);
+  if (!options.skipGithub && canPublish) {
+    const result = await runPublishWorkflow(rootDir, analysis, options);
+    resolvedRepoUrl = result.url;
+    published = result.published;
   }
 
   // Step 7: Social content
   if (!options.skipLinkedin) {
-    await handleSocialContent(analysis, useAI, options, resolvedRepoUrl);
+    await handleSocialContent(rootDir, scan, analysis, useAI, options, published ? resolvedRepoUrl : undefined);
   }
 
   logger.blank();
-  logger.success(chalk.bold('Done! Your project is documented and published. 🎉'));
+  logger.success(chalk.bold(published ? 'Done! Your project was published.' : 'Done! Local project work finished; no push was made.'));
 }
 
 function formatAnalysisSummary(analysis: ProjectAnalysis): string {
@@ -121,6 +131,15 @@ async function handleReadme(
 
   if (result.isNew) {
     logger.info('No README found. Generated new README.md');
+    if (!options.yes && !options.dryRun) {
+      logger.blank();
+      console.log(result.content);
+      logger.blank();
+      const { confirm } = await inquirer.prompt([{
+        type: 'confirm', name: 'confirm', message: 'Create README.md?', default: true,
+      }]);
+      if (!confirm) return null;
+    }
   } else if (result.diff) {
     logger.info('README improvements found');
 
@@ -142,6 +161,11 @@ async function handleReadme(
         return null;
       }
     }
+  }
+
+  if (!result.isNew && !result.diff) {
+    logger.dimmed('README is already up to date');
+    return result;
   }
 
   if (!options.dryRun) {
@@ -201,11 +225,9 @@ async function handleDocs(
 async function handleGit(
   rootDir: string,
   analysis: ProjectAnalysis,
-  readmeResult: ReadmeResult | null,
-  docs: DocFile[],
   useAI: boolean,
   options: PipelineOptions
-): Promise<void> {
+): Promise<boolean> {
   const status = await getGitStatus(rootDir);
 
   // Initialize git if needed
@@ -218,138 +240,24 @@ async function handleGit(
     }
   }
 
-  // Stage changes
   if (options.dryRun) {
-    logger.dimmed('[dry-run] Would stage and commit changes');
-    return;
-  }
-
-  await stageAll(rootDir);
-
-  // Generate commit message
-  let commitMsg = await generateCommitMessage(rootDir, useAI);
-
-  if (!options.yes) {
-    logger.blank();
-    logger.info(`Commit message: ${chalk.cyan(commitMsg)}`);
-    const { editCommit } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'editCommit',
-      message: 'Edit commit message?',
-      default: false,
-    }]);
-
-    if (editCommit) {
-      const { newMsg } = await inquirer.prompt([{
-        type: 'input',
-        name: 'newMsg',
-        message: 'Commit message:',
-        default: commitMsg,
-      }]);
-      commitMsg = newMsg;
-    }
-  }
-
-  await commit(rootDir, commitMsg);
-  logger.success(`Committed: ${commitMsg}`);
-}
-
-async function handleGitHub(
-  rootDir: string,
-  analysis: ProjectAnalysis,
-  options: PipelineOptions
-): Promise<string | undefined> {
-  if (!isGitHubConfigured()) {
-    logger.warn('GitHub not configured. Run "autogit login" or set GITHUB_TOKEN');
-    return undefined;
-  }
-
-  await getGitStatus(rootDir); // ensure git is initialised before pushing
-
-  try {
-    const user = await getAuthenticatedUser();
-    logger.info(`Authenticated as ${chalk.bold(user.login)}`);
-
-    const repoName = analysis.name;
-    const exists = await repoExists(user.login, repoName);
-    let repoHtmlUrl = `https://github.com/${user.login}/${repoName}`;
-
-    if (!exists) {
-      // Ask about visibility if not already specified via flags
-      let isPrivate: boolean;
-      if (options.private !== undefined || options.public !== undefined) {
-        isPrivate = options.private ?? !(options.public ?? false);
-      } else if (options.yes) {
-        isPrivate = false; // default to public when --yes
-      } else {
-        logger.blank();
-        const { visibility } = await inquirer.prompt<{ visibility: string }>([{
-          type: 'list',
-          name: 'visibility',
-          message: `Repository visibility for "${repoName}":`,
-          choices: [
-            { name: 'Public  (anyone can see it)', value: 'public' },
-            { name: 'Private (only you can see it)', value: 'private' },
-          ],
-          default: 'public',
-        }]);
-        isPrivate = visibility === 'private';
-      }
-
-      if (!options.yes) {
-        logger.blank();
-        logger.info(`Will create ${isPrivate ? 'private' : 'public'} repository: ${user.login}/${repoName}`);
-        const { confirm } = await inquirer.prompt([{
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Create GitHub repository?',
-          default: true,
-        }]);
-
-        if (!confirm) {
-          logger.dimmed('GitHub repository creation skipped');
-          return undefined;
-        }
-      }
-
-      if (!options.dryRun) {
-        const topics = generateTopics(analysis);
-        const repo = await createRepo({
-          name: repoName,
-          description: analysis.description || `${analysis.languages[0] || ''} project`,
-          isPrivate,
-          topics,
-        });
-
-        await addRemote(rootDir, repo.cloneUrl);
-        repoHtmlUrl = repo.htmlUrl;
-        logger.success(`Created repository: ${chalk.underline(repo.htmlUrl)}`);
-      } else {
-        logger.dimmed(`[dry-run] Would create repository: ${user.login}/${repoName}`);
-      }
+    if (status.isRepo) {
+      const plan = await getCommitPlan(rootDir);
+      logger.dimmed(`[dry-run] Branch: ${plan.branch || '(not yet named)'}, origin: ${plan.remoteUrl || '(none)'}`);
+      logger.dimmed(`[dry-run] Already staged: ${plan.staged.join(', ') || '(none)'}`);
+      logger.dimmed(`[dry-run] Would stage: ${plan.toStage.join(', ') || '(none)'}`);
+      if (plan.sensitive.length) logger.warn(`[dry-run] Sensitive files detected: ${plan.sensitive.join(', ')}`);
     } else {
-      logger.info(`Repository exists: ${chalk.underline(repoHtmlUrl)}`);
+      logger.dimmed('[dry-run] Would stage the generated project files and commit them');
     }
-
-    // Push
-    if (!options.dryRun) {
-      const pushSpin = spinner('Pushing to GitHub...').start();
-      try {
-        await push(rootDir);
-        pushSpin.succeed('Pushed to GitHub');
-      } catch (error: any) {
-        pushSpin.fail(`Push failed: ${error.message}`);
-      }
-    }
-
-    return repoHtmlUrl;
-  } catch (error: any) {
-    logger.error(`GitHub error: ${error.message}`);
-    return undefined;
+    return true;
   }
+  return runCommitWorkflow(rootDir, options.yes === true, useAI);
 }
 
 async function handleSocialContent(
+  rootDir: string,
+  scan: import('../scanner/file-scanner.js').ScanResult,
   analysis: ProjectAnalysis,
   useAI: boolean,
   options: PipelineOptions,
@@ -358,9 +266,65 @@ async function handleSocialContent(
   const content = await generateSocialContent(analysis, useAI);
 
   // Replace placeholder with real repo URL if we have it
-  const url = repoUrl || `https://github.com/${analysis.name}`;
-  const linkedinText = content.linkedin.medium.replace(/\[GITHUB_LINK\]/g, url);
-  const tweetText = content.twitter.replace(/\[GITHUB_LINK\]/g, url);
+  const url = repoUrl;
+  let linkedinText = content.linkedin.medium.replace(/\[GITHUB_LINK\]/g, url || '[ADD_PROJECT_URL]');
+  const tweetText = content.twitter.replace(/\[GITHUB_LINK\]/g, url || '[ADD_PROJECT_URL]');
+
+  let shareDirectory: string | undefined;
+  if (options.dryRun) {
+    logger.dimmed('[dry-run] Would create a share package with sourced post, drafts, and three PNG cards');
+  } else {
+    try {
+      const share = await createSharePackage(rootDir, scan, analysis, content, useAI, url);
+      shareDirectory = share.directory;
+      linkedinText = share.post;
+      logger.success(`Share package saved: ${share.directory}`);
+      logger.dimmed(`${share.cards.length} PNG cards and sourced post are ready for review.`);
+    } catch (error: any) {
+      logger.warn(`Share package could not be saved: ${error.message}`);
+    }
+  }
+
+  let screenshotUrl = options.screenshotUrl;
+  let promoImage = options.promoImage === true;
+  if (!options.yes && !options.dryRun && !screenshotUrl && !promoImage && shareDirectory) {
+    const answer = await inquirer.prompt<{ media: string }>([{
+      type: 'list', name: 'media', message: 'Add a real screenshot or promotional artwork?',
+      choices: [
+        { name: 'No additional media', value: 'none' },
+        { name: 'Real app screenshot', value: 'screenshot' },
+        { name: 'Conceptual artwork', value: 'artwork' },
+        { name: 'Both', value: 'both' },
+      ], default: 'none',
+    }]);
+    if (answer.media === 'screenshot' || answer.media === 'both') {
+      const urlAnswer = await inquirer.prompt<{ url: string }>([{
+        type: 'input', name: 'url', message: 'Running app URL:',
+        validate: value => /^https?:\/\//i.test(value) || 'Enter an http:// or https:// URL',
+      }]);
+      screenshotUrl = urlAnswer.url;
+    }
+    promoImage = answer.media === 'artwork' || answer.media === 'both';
+  }
+  if (options.dryRun) {
+    if (screenshotUrl) logger.dimmed(`[dry-run] Would capture screenshot from ${screenshotUrl}`);
+    if (promoImage) logger.dimmed('[dry-run] Would generate promotional artwork');
+  } else if (shareDirectory) {
+    if (screenshotUrl) {
+      try {
+        const path = join(shareDirectory, 'screenshot.png');
+        await captureProjectScreenshot(screenshotUrl, path);
+        logger.success(`Screenshot saved: ${path}`);
+      } catch (error: any) { logger.warn(`Screenshot unavailable: ${error.message}`); }
+    }
+    if (promoImage) {
+      try {
+        const path = join(shareDirectory, 'artwork.png');
+        await generatePromotionalArtwork(analysis, path);
+        logger.success(`Artwork saved: ${path}`);
+      } catch (error: any) { logger.warn(`Artwork unavailable: ${error.message}`); }
+    }
+  }
 
   logger.blank();
   logger.header('LinkedIn Post (Medium)');
@@ -377,13 +341,15 @@ async function handleSocialContent(
       message: 'Open LinkedIn share dialog in browser?',
       default: true,
     }]);
-    if (openLinkedIn) {
+    if (openLinkedIn && url) {
       // Auto-copy the post text to clipboard so user can paste immediately
       const copied = await copyToClipboard(linkedinText);
       await openLinkedInShare(url);
       if (copied) {
         logger.success('LinkedIn post copied to clipboard — just paste it into the share dialog');
       }
+    } else if (openLinkedIn) {
+      logger.warn('No repository URL found. Add a project URL before sharing.');
     }
 
     const { openTwitter } = await inquirer.prompt([{
@@ -393,11 +359,29 @@ async function handleSocialContent(
       default: true,
     }]);
     if (openTwitter) {
-      await openTwitterShare(tweetText, url);
+      await openTwitterShare(tweetText, url || '');
     }
   }
 
-  logger.dimmed('Tip: Use "autogit linkedin" to see all versions (short/medium/long)');
+  if (!options.dryRun) {
+    const config = loadConfig();
+    const agent = selectBragAgent(config.ai?.provider || 'openai');
+    if (config.setup?.brag === 'installed' && config.setup.agent === agent) {
+      let createVideo = options.yes === true;
+      if (!options.yes) {
+        const answer = await inquirer.prompt<{ createVideo: boolean }>([{
+          type: 'confirm', name: 'createVideo', message: 'Create a Brag video for this project?', default: false,
+        }]);
+        createVideo = answer.createVideo;
+      }
+      if (createVideo) {
+        try { await runBragInProject(rootDir); }
+        catch (error: any) { logger.warn(`Brag video was not completed: ${error.message}`); }
+      }
+    }
+  }
+
+  logger.dimmed('Review the saved post and media before publishing on LinkedIn.');
 }
 
 async function handleResume(

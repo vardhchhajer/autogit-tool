@@ -16,6 +16,21 @@ export async function cmdReadme(opts: { ai?: boolean; regenerate?: boolean }): P
 
   const result = await generateReadme(rootDir, analysis, useAI, scan);
 
+  if (!result.isNew && !result.diff) {
+    logger.success('README is already up to date');
+    return;
+  }
+
+  if (result.isNew) {
+    logger.blank();
+    console.log(result.content);
+    logger.blank();
+    const { confirm } = await inquirer.prompt([{
+      type: 'confirm', name: 'confirm', message: 'Create README.md?', default: true,
+    }]);
+    if (!confirm) return;
+  }
+
   if (result.diff) {
     logger.blank();
     displayDiff(result.diff);

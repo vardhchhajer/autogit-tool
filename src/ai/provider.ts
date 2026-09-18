@@ -423,6 +423,24 @@ class NvidiaProvider implements AIProvider {
   }
 }
 
+class HostedOpenAICompatibleProvider implements AIProvider {
+  constructor(
+    public name: string,
+    private readonly endpoint: string,
+    private readonly defaultModel: string,
+    private readonly getKey: () => string | undefined,
+  ) {}
+
+  isConfigured() { return !!this.getKey(); }
+
+  async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
+    const cfg = getAIConfig();
+    const model = cfg.model || this.defaultModel;
+    const content = await openAICompatPost(this.endpoint, this.getKey()!, model, messages, options);
+    return { content, provider: this.name, model };
+  }
+}
+
 // ─── Custom OpenAI-compatible endpoint ───────────────────────────────────────
 // Works with any server that speaks the OpenAI chat completions format:
 // LM Studio, Jan, LocalAI, vLLM, llama.cpp server, text-generation-webui, etc.
@@ -495,6 +513,10 @@ const providers: Record<string, AIProvider> = {
   xai:            new XAIProvider(),
   'azure-openai': new AzureOpenAIProvider(),
   nvidia:         new NvidiaProvider(),
+  cerebras:       new HostedOpenAICompatibleProvider('cerebras', 'https://api.cerebras.ai/v1/chat/completions', 'gpt-oss-120b', () => getAIConfig().cerebrasKey),
+  deepinfra:      new HostedOpenAICompatibleProvider('deepinfra', 'https://api.deepinfra.com/v1/openai/chat/completions', 'deepseek-ai/DeepSeek-V3.2', () => getAIConfig().deepinfraKey),
+  huggingface:    new HostedOpenAICompatibleProvider('huggingface', 'https://router.huggingface.co/v1/chat/completions', 'openai/gpt-oss-120b:fastest', () => getAIConfig().huggingfaceKey),
+  fireworks:      new HostedOpenAICompatibleProvider('fireworks', 'https://api.fireworks.ai/inference/v1/chat/completions', 'accounts/fireworks/models/llama-v3p1-8b-instruct', () => getAIConfig().fireworksKey),
   custom:         new CustomProvider(),
 };
 
@@ -533,6 +555,10 @@ export function listProviders(): { name: string; configured: boolean; defaultMod
     xai:            'grok-3-fast-beta',
     'azure-openai': '(your deployment name)',
     nvidia:         'meta/llama-3.3-70b-instruct',
+    cerebras:       'gpt-oss-120b',
+    deepinfra:      'deepseek-ai/DeepSeek-V3.2',
+    huggingface:    'openai/gpt-oss-120b:fastest',
+    fireworks:      'accounts/fireworks/models/llama-v3p1-8b-instruct',
     custom:         '(your model name)',
   };
 
