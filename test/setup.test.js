@@ -12,6 +12,7 @@ test('Brag agent follows the selected provider', () => {
   assert.equal(selectBragAgent('anthropic'), 'claude-code');
   assert.equal(selectBragAgent('groq'), 'opencode');
   assert.equal(selectBragAgent('custom'), 'opencode');
+  assert.equal(selectBragAgent('groq', 'antigravity'), 'antigravity');
   assert.equal(agentPackageName('opencode'), 'opencode-ai');
 });
 
@@ -47,22 +48,31 @@ test('OpenCode receives only the chosen provider key and model', () => {
   }
 });
 
-test('OpenAI and Anthropic use their matching agents', () => {
+test('Codex and Claude Code use their subscription sessions rather than API keys', () => {
   const prior = { OPENAI_API_KEY: process.env.OPENAI_API_KEY, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY };
   try {
     process.env.OPENAI_API_KEY = 'openai-test-key';
     process.env.ANTHROPIC_API_KEY = 'anthropic-test-key';
     const codex = buildBragLaunch('openai', 'Make a video');
     assert.equal(codex.executable, 'codex');
-    assert.equal(codex.env.CODEX_API_KEY, 'openai-test-key');
+    assert.equal(codex.env.CODEX_API_KEY, undefined);
+    assert.equal(codex.env.OPENAI_API_KEY, undefined);
     assert.equal(codex.env.ANTHROPIC_API_KEY, undefined);
     const claude = buildBragLaunch('anthropic', 'Make a video');
     assert.equal(claude.executable, 'claude');
-    assert.equal(claude.env.ANTHROPIC_API_KEY, 'anthropic-test-key');
+    assert.equal(claude.env.ANTHROPIC_API_KEY, undefined);
     assert.equal(claude.env.OPENAI_API_KEY, undefined);
   } finally {
     for (const [key, value] of Object.entries(prior)) value === undefined ? delete process.env[key] : process.env[key] = value;
   }
+});
+
+test('Antigravity uses its own OAuth session in headless prompt mode', () => {
+  const launch = buildBragLaunch('gemini', 'Make a video', 'antigravity');
+  assert.equal(launch.agent, 'antigravity');
+  assert.equal(launch.executable, 'agy');
+  assert.deepEqual(launch.args.slice(0, 2), ['-p', 'Make a video']);
+  assert.equal(launch.env.GEMINI_API_KEY, undefined);
 });
 
 test('local Ollama maps to OpenCode without an API key', () => {

@@ -365,7 +365,7 @@ async function handleSocialContent(
 
   if (!options.dryRun) {
     const config = loadConfig();
-    const agent = selectBragAgent(config.ai?.provider || 'openai');
+    const agent = config.setup?.agent || selectBragAgent(config.ai?.provider || 'openai');
     if (config.setup?.brag === 'installed' && config.setup.agent === agent) {
       let createVideo = options.yes === true;
       if (!options.yes) {

@@ -55,7 +55,7 @@ export interface AutoGitConfig {
   setup?: {
     completed?: boolean;
     brag?: 'installed' | 'skipped' | 'failed';
-    agent?: 'codex' | 'claude-code' | 'opencode';
+    agent?: 'codex' | 'claude-code' | 'antigravity' | 'opencode';
   };
   github?: {
     token?: string;

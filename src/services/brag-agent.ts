@@ -3,15 +3,19 @@ import { promisify } from 'util';
 import { getAIConfig, loadConfig, type AIProviderName } from '../config/manager.js';
 import { listProviders } from '../ai/provider.js';
 import { ensureBragRuntime } from './brag-runtime.js';
-import { delimiter } from 'path';
+import { delimiter, join } from 'path';
+import { homedir } from 'os';
+import { existsSync } from 'fs';
 
 const run = promisify(execFile);
 
-export type BragAgent = 'codex' | 'claude-code' | 'opencode';
+export type BragAgent = 'codex' | 'claude-code' | 'antigravity' | 'opencode';
+export type BragAgentPreference = 'automatic' | BragAgent;
 
-const AGENTS: Record<BragAgent, { command: string; packageName: string }> = {
+const AGENTS: Record<BragAgent, { command: string; packageName?: string }> = {
   codex: { command: 'codex', packageName: '@openai/codex' },
   'claude-code': { command: 'claude', packageName: '@anthropic-ai/claude-code' },
+  antigravity: { command: 'agy' },
   opencode: { command: 'opencode', packageName: 'opencode-ai' },
 };
 
@@ -33,14 +37,15 @@ function agentEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-export function selectBragAgent(provider: AIProviderName): BragAgent {
+export function selectBragAgent(provider: AIProviderName, preferred: BragAgentPreference = 'automatic'): BragAgent {
+  if (preferred !== 'automatic') return preferred;
   if (provider === 'openai') return 'codex';
   if (provider === 'anthropic') return 'claude-code';
   return 'opencode';
 }
 
 export function agentPackageName(agent: BragAgent): string {
-  return AGENTS[agent].packageName;
+  return AGENTS[agent].packageName || 'Google Antigravity CLI';
 }
 
 export function bragSkillInstallCommand(agent: BragAgent, platform: NodeJS.Platform): { executable: string; args: string[] } {
@@ -61,19 +66,36 @@ async function executablePath(command: string): Promise<string | null> {
   } catch { return null; }
 }
 
+async function agentExecutablePath(agent: BragAgent): Promise<string | null> {
+  const discovered = await executablePath(AGENTS[agent].command);
+  if (discovered || agent !== 'antigravity') return discovered;
+  const installed = process.platform === 'win32'
+    ? join(process.env.LOCALAPPDATA || homedir(), 'agy', 'bin', 'agy.exe')
+    : join(homedir(), '.local', 'bin', 'agy');
+  return existsSync(installed) ? installed : null;
+}
+
 export async function ensureBragAgent(agent: BragAgent, pathPrefix = ''): Promise<void> {
-  if (await executablePath(AGENTS[agent].command)) return;
-  const packageName = AGENTS[agent].packageName;
-  const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm';
-  const args = process.platform === 'win32'
-    ? ['/d', '/s', '/c', 'npm.cmd', 'install', '--global', packageName]
-    : ['install', '--global', packageName];
+  if (await agentExecutablePath(agent)) return;
   const env = installerEnv();
   if (pathPrefix) env.PATH = `${pathPrefix}${delimiter}${env.Path || env.PATH || ''}`;
   if (process.platform === 'win32' && pathPrefix) env.Path = env.PATH;
-  await run(executable, args, { timeout: 240_000, windowsHide: true, maxBuffer: 2 * 1024 * 1024, env });
-  if (!(await executablePath(AGENTS[agent].command))) {
-    throw new Error(`${packageName} installed, but ${AGENTS[agent].command} is not on PATH. Restart your terminal and run autogit setup again.`);
+  if (agent === 'antigravity') {
+    const executable = process.platform === 'win32' ? 'powershell.exe' : '/bin/sh';
+    const args = process.platform === 'win32'
+      ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'irm https://antigravity.google/cli/install.ps1 | iex']
+      : ['-c', 'curl -fsSL https://antigravity.google/cli/install.sh | bash'];
+    await run(executable, args, { timeout: 240_000, windowsHide: true, maxBuffer: 2 * 1024 * 1024, env });
+  } else {
+    const packageName = AGENTS[agent].packageName!;
+    const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm';
+    const args = process.platform === 'win32'
+      ? ['/d', '/s', '/c', 'npm.cmd', 'install', '--global', packageName]
+      : ['install', '--global', packageName];
+    await run(executable, args, { timeout: 240_000, windowsHide: true, maxBuffer: 2 * 1024 * 1024, env });
+  }
+  if (!(await agentExecutablePath(agent))) {
+    throw new Error(`${agentPackageName(agent)} installed, but ${AGENTS[agent].command} is not available. Restart your terminal and run autogit setup again.`);
   }
 }
 
@@ -93,12 +115,16 @@ export interface BragLaunch {
   env: NodeJS.ProcessEnv;
 }
 
-export function buildBragLaunch(provider: AIProviderName, prompt: string): BragLaunch {
+export function buildBragLaunch(provider: AIProviderName, prompt: string, preferred: BragAgentPreference = 'automatic'): BragLaunch {
   const ai = getAIConfig();
-  const agent = selectBragAgent(provider);
+  const agent = selectBragAgent(provider, preferred);
   const env = agentEnv();
+  // Native agents use their own saved OAuth session, not AutoGit API credentials.
+  if (agent === 'codex') return { agent, executable: 'codex', args: ['exec', prompt], env };
+  if (agent === 'claude-code') return { agent, executable: 'claude', args: ['-p', prompt], env };
+  if (agent === 'antigravity') return { agent, executable: 'agy', args: ['-p', prompt, '--print-timeout', '10m'], env };
   const keyFields: Partial<Record<AIProviderName, [string, string | undefined]>> = {
-    openai: ['CODEX_API_KEY', ai.openaiKey],
+    openai: ['OPENAI_API_KEY', ai.openaiKey],
     anthropic: ['ANTHROPIC_API_KEY', ai.anthropicKey],
     gemini: ['GEMINI_API_KEY', ai.geminiKey],
     openrouter: ['OPENROUTER_API_KEY', ai.openrouterKey],
@@ -120,9 +146,6 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string): BragL
   const credential = keyFields[provider];
   if (credential && !credential[1] && provider !== 'custom') throw new Error(`No ${provider} credential is configured. Run autogit config.`);
   if (credential) env[credential[0]] = credential[1] || '';
-
-  if (agent === 'codex') return { agent, executable: 'codex', args: ['exec', prompt], env };
-  if (agent === 'claude-code') return { agent, executable: 'claude', args: ['-p', prompt], env };
 
   const defaultModel = listProviders().find(item => item.name === provider)?.defaultModel;
   const model = provider === 'custom'
@@ -153,17 +176,17 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string): BragL
 export async function runBragInProject(root: string): Promise<void> {
   const config = loadConfig();
   const provider = config.ai?.provider || getAIConfig().provider;
-  const agent = selectBragAgent(provider);
+  const agent = config.setup?.agent || selectBragAgent(provider);
   if (config.setup?.brag !== 'installed' || config.setup.agent !== agent) {
     throw new Error(`Brag is not installed for ${agent}. Run autogit setup first.`);
   }
   const prompt = 'Use the installed brag skill to inspect this project and produce its launch video and share copy. Do not invent features, results, or UI that the project does not have. For a CLI, API, library, or data project, show real commands, requests, usage, or verified results instead of a fake app screenshot. Do not modify project source files.';
-  const launch = buildBragLaunch(provider, prompt);
+  const launch = buildBragLaunch(provider, prompt, agent);
   const runtime = await ensureBragRuntime();
   const inheritedPath = launch.env.Path || launch.env.PATH || '';
   launch.env.PATH = `${runtime.pathPrefix}${delimiter}${inheritedPath}`;
   if (process.platform === 'win32') launch.env.Path = launch.env.PATH;
-  const path = await executablePath(launch.executable);
+  const path = await agentExecutablePath(launch.agent);
   if (!path) throw new Error(`${launch.agent} is not on PATH. Run autogit setup again.`);
   const isBatch = process.platform === 'win32' && /\.(cmd|bat)$/i.test(path);
   const executable = isBatch ? (process.env.ComSpec || 'cmd.exe') : path;

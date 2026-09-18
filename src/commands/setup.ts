@@ -2,7 +2,7 @@ import inquirer from 'inquirer';
 import { getAIConfig, loadConfig, saveConfig } from '../config/manager.js';
 import { configureAI, configureDefaults } from './config.js';
 import { logger } from '../utils/logger.js';
-import { buildBragLaunch, ensureBragAgent, installBragSkill, selectBragAgent } from '../services/brag-agent.js';
+import { buildBragLaunch, ensureBragAgent, installBragSkill, selectBragAgent, type BragAgentPreference } from '../services/brag-agent.js';
 import { ensureBragRuntime } from '../services/brag-runtime.js';
 
 export function shouldRunFirstSetup(interactive: boolean): boolean {
@@ -31,6 +31,21 @@ export async function cmdSetup(): Promise<void> {
     default: true,
   }]);
 
+  let preferredAgent: BragAgentPreference = 'automatic';
+  if (includeBrag) {
+    const answer = await inquirer.prompt<{ agent: BragAgentPreference }>([{
+      type: 'list', name: 'agent', message: 'Coding agent for Brag:',
+      choices: [
+        { name: 'Automatic (Codex for OpenAI, Claude Code for Anthropic, OpenCode otherwise)', value: 'automatic' },
+        { name: 'Codex (ChatGPT subscription sign-in)', value: 'codex' },
+        { name: 'Claude Code (Claude subscription sign-in)', value: 'claude-code' },
+        { name: 'Antigravity (Google account sign-in)', value: 'antigravity' },
+        { name: 'OpenCode (selected API provider)', value: 'opencode' },
+      ], default: 'automatic',
+    }]);
+    preferredAgent = answer.agent;
+  }
+
   logger.blank();
   logger.header('AI Provider');
   await configureAI();
@@ -39,15 +54,16 @@ export async function cmdSetup(): Promise<void> {
   let agent: ReturnType<typeof selectBragAgent> | undefined;
   if (includeBrag) {
     const provider = loadConfig().ai?.provider || getAIConfig().provider;
-    agent = selectBragAgent(provider);
+    agent = selectBragAgent(provider, preferredAgent);
     logger.info(`Setting up Brag with ${agent}...`);
     try {
-      buildBragLaunch(provider, 'Verify provider configuration');
+      buildBragLaunch(provider, 'Verify provider configuration', agent);
       const runtime = await ensureBragRuntime();
       await ensureBragAgent(agent, runtime.pathPrefix);
       await installBragSkill(agent, runtime.pathPrefix);
       brag = 'installed';
       logger.success(`Brag skill and ${agent} are installed.`);
+      if (agent !== 'opencode') logger.dimmed(`On first use, sign in to ${agent} in the browser to use its subscription quota.`);
       logger.dimmed('Video rendering uses Hyperframes, which may download its renderer on first use.');
     } catch (error: any) {
       brag = 'failed';
