@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { shouldRunFirstSetup } from '../dist/commands/setup.js';
 import { agentPackageName, bragSkillInstallCommand, buildBragLaunch, selectBragAgent } from '../dist/services/brag-agent.js';
+import { isOAuthAgentProvider, listProviders } from '../dist/ai/provider.js';
 
 test('noninteractive runs never start the setup wizard', () => {
   assert.equal(shouldRunFirstSetup(false), false);
@@ -14,6 +15,17 @@ test('Brag agent follows the selected provider', () => {
   assert.equal(selectBragAgent('custom'), 'opencode');
   assert.equal(selectBragAgent('groq', 'antigravity'), 'antigravity');
   assert.equal(agentPackageName('opencode'), 'opencode-ai');
+});
+
+test('OAuth coding agents are selectable AI providers before Brag setup', () => {
+  const names = listProviders().map(provider => provider.name);
+  assert.ok(names.includes('codex'));
+  assert.ok(names.includes('claude-code'));
+  assert.ok(names.includes('antigravity'));
+  assert.equal(isOAuthAgentProvider('codex'), true);
+  assert.equal(isOAuthAgentProvider('claude-code'), true);
+  assert.equal(isOAuthAgentProvider('antigravity'), true);
+  assert.equal(selectBragAgent('antigravity'), 'antigravity');
 });
 
 test('Brag installation targets the chosen agent globally and copies files on Windows', () => {

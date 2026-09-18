@@ -25,14 +25,19 @@ export async function cmdSetup(): Promise<void> {
 
   if (mode === 'custom') await configureDefaults();
 
+  logger.blank();
+  logger.header('AI Provider');
+  await configureAI();
+
+  const provider = loadConfig().ai?.provider || getAIConfig().provider;
   const { includeBrag } = await inquirer.prompt<{ includeBrag: boolean }>([{
     type: 'confirm', name: 'includeBrag',
-    message: 'Install Brag and a coding agent matched to your AI provider?',
+    message: 'Install Brag for this provider?',
     default: true,
   }]);
 
   let preferredAgent: BragAgentPreference = 'automatic';
-  if (includeBrag) {
+  if (includeBrag && !['codex', 'claude-code', 'antigravity'].includes(provider)) {
     const answer = await inquirer.prompt<{ agent: BragAgentPreference }>([{
       type: 'list', name: 'agent', message: 'Coding agent for Brag:',
       choices: [
@@ -46,23 +51,20 @@ export async function cmdSetup(): Promise<void> {
     preferredAgent = answer.agent;
   }
 
-  logger.blank();
-  logger.header('AI Provider');
-  await configureAI();
-
   let brag: 'installed' | 'skipped' | 'failed' = 'skipped';
   let agent: ReturnType<typeof selectBragAgent> | undefined;
-  if (includeBrag) {
-    const provider = loadConfig().ai?.provider || getAIConfig().provider;
+  if (includeBrag || ['codex', 'claude-code', 'antigravity'].includes(provider)) {
     agent = selectBragAgent(provider, preferredAgent);
-    logger.info(`Setting up Brag with ${agent}...`);
+    logger.info(`Setting up ${agent}${includeBrag ? ' and Brag' : ''}...`);
     try {
-      buildBragLaunch(provider, 'Verify provider configuration', agent);
+      if (includeBrag) buildBragLaunch(provider, 'Verify provider configuration', agent);
       const runtime = await ensureBragRuntime();
       await ensureBragAgent(agent, runtime.pathPrefix);
-      await installBragSkill(agent, runtime.pathPrefix);
-      brag = 'installed';
-      logger.success(`Brag skill and ${agent} are installed.`);
+      if (includeBrag) {
+        await installBragSkill(agent, runtime.pathPrefix);
+        brag = 'installed';
+        logger.success(`Brag skill and ${agent} are installed.`);
+      } else logger.success(`${agent} is installed.`);
       if (agent !== 'opencode') logger.dimmed(`On first use, sign in to ${agent} in the browser to use its subscription quota.`);
       logger.dimmed('Video rendering uses Hyperframes, which may download its renderer on first use.');
     } catch (error: any) {

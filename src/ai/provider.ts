@@ -1,4 +1,8 @@
 import { getAIConfig } from '../config/manager.js';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const run = promisify(execFile);
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -441,6 +445,41 @@ class HostedOpenAICompatibleProvider implements AIProvider {
   }
 }
 
+const OAUTH_AGENT_PROVIDERS = new Set(['codex', 'claude-code', 'antigravity']);
+export function isOAuthAgentProvider(name: string): boolean { return OAUTH_AGENT_PROVIDERS.has(name); }
+
+class OAuthAgentProvider implements AIProvider {
+  constructor(public name: 'codex' | 'claude-code' | 'antigravity') {}
+
+  isConfigured() { return true; }
+
+  async generate(messages: AIMessage[]): Promise<AIResponse> {
+    const instruction = [
+      'You are AutoGit\'s text-generation backend.',
+      'Do not create, edit, delete, stage, commit, push, or run project commands.',
+      'Return only the requested final text, with no explanation of your process.',
+      ...messages.map(message => `${message.role.toUpperCase()}:\n${message.content}`),
+    ].join('\n\n');
+    const env = { ...process.env };
+    if (this.name === 'codex') { delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY; }
+    if (this.name === 'claude-code') delete env.ANTHROPIC_API_KEY;
+    if (this.name === 'antigravity') delete env.GEMINI_API_KEY;
+    const command = this.name === 'codex' ? 'codex' : this.name === 'claude-code' ? 'claude' : 'agy';
+    const args = this.name === 'codex' ? ['exec', instruction]
+      : this.name === 'claude-code' ? ['-p', instruction]
+      : ['-p', instruction, '--print-timeout', '5m'];
+    try {
+      const { stdout } = await run(command, args, { cwd: process.cwd(), env, timeout: 360_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
+      const content = stdout.trim();
+      if (!content) throw new Error(`${this.name} returned no text`);
+      return { content, provider: this.name, model: 'subscription' };
+    } catch (error: any) {
+      if (error.code === 'ENOENT') throw new Error(`${this.name} is not installed. Run autogit setup to install and sign in.`);
+      throw new Error(`${this.name} OAuth generation failed: ${error.stderr?.trim() || error.message}`);
+    }
+  }
+}
+
 // ─── Custom OpenAI-compatible endpoint ───────────────────────────────────────
 // Works with any server that speaks the OpenAI chat completions format:
 // LM Studio, Jan, LocalAI, vLLM, llama.cpp server, text-generation-webui, etc.
@@ -517,6 +556,9 @@ const providers: Record<string, AIProvider> = {
   deepinfra:      new HostedOpenAICompatibleProvider('deepinfra', 'https://api.deepinfra.com/v1/openai/chat/completions', 'deepseek-ai/DeepSeek-V3.2', () => getAIConfig().deepinfraKey),
   huggingface:    new HostedOpenAICompatibleProvider('huggingface', 'https://router.huggingface.co/v1/chat/completions', 'openai/gpt-oss-120b:fastest', () => getAIConfig().huggingfaceKey),
   fireworks:      new HostedOpenAICompatibleProvider('fireworks', 'https://api.fireworks.ai/inference/v1/chat/completions', 'accounts/fireworks/models/llama-v3p1-8b-instruct', () => getAIConfig().fireworksKey),
+  codex:          new OAuthAgentProvider('codex'),
+  'claude-code':  new OAuthAgentProvider('claude-code'),
+  antigravity:    new OAuthAgentProvider('antigravity'),
   custom:         new CustomProvider(),
 };
 
@@ -559,6 +601,9 @@ export function listProviders(): { name: string; configured: boolean; defaultMod
     deepinfra:      'deepseek-ai/DeepSeek-V3.2',
     huggingface:    'openai/gpt-oss-120b:fastest',
     fireworks:      'accounts/fireworks/models/llama-v3p1-8b-instruct',
+    codex:          'ChatGPT subscription',
+    'claude-code':  'Claude subscription',
+    antigravity:    'Google account subscription',
     custom:         '(your model name)',
   };
 

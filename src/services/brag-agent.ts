@@ -39,6 +39,7 @@ function agentEnv(): NodeJS.ProcessEnv {
 
 export function selectBragAgent(provider: AIProviderName, preferred: BragAgentPreference = 'automatic'): BragAgent {
   if (preferred !== 'automatic') return preferred;
+  if (provider === 'codex' || provider === 'claude-code' || provider === 'antigravity') return provider;
   if (provider === 'openai') return 'codex';
   if (provider === 'anthropic') return 'claude-code';
   return 'opencode';

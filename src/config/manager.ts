@@ -49,6 +49,9 @@ export type AIProviderName =
   | 'deepinfra'
   | 'huggingface'
   | 'fireworks'
+  | 'codex'
+  | 'claude-code'
+  | 'antigravity'
   | 'custom';
 
 export interface AutoGitConfig {

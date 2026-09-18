@@ -43,7 +43,7 @@ npm install -g autogit-tool
 
 **Requirements:** Node.js 18+, Git
 
-On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, whether to include Brag (**Yes** preselected), a coding-agent runner, and finally which AI provider to use. Automatic routing selects Codex for OpenAI, Claude Code for Anthropic, and OpenCode for other providers; you can instead choose Codex, Claude Code, Antigravity, or OpenCode directly. Codex, Claude Code, and Antigravity use their own browser sign-in and subscription quota. OpenCode uses your selected API provider, including a custom OpenAI-compatible endpoint. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
+On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, then which AI provider to use, and finally whether to include Brag (**Yes** preselected). **Codex**, **Claude Code**, and **Antigravity** appear directly in the AI-provider list and use their own browser sign-in and subscription quota for AutoGit generation. API providers, including a custom OpenAI-compatible endpoint, use their selected API key. When Brag is included, AutoGit installs a matching coding agent and its skill. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
 
 The optional Brag step installs the selected agent and its skill globally. Run `autogit brag` from a project folder to start the video workflow. Codex, Claude Code, and Antigravity use their own cached OAuth sessions; AutoGit never passes them an API key. OpenCode receives only the selected provider credential for that one process and does not store it in OpenCode settings. During opted-in setup, AutoGit installs Node 22 and FFmpeg into its user-data folder if needed; Brag uses `npx hyperframes` to fetch its renderer on first use. The managed FFmpeg binary is a third-party GPL-licensed component. The image-card showcase works without those video tools. Azure OpenAI is not yet mapped to the OpenCode runner.
 
@@ -69,7 +69,7 @@ autogit
 
 ## AI Providers
 
-AutoGit supports 13 AI providers. Configure via `autogit config` or environment variables.
+AutoGit supports API providers plus three OAuth-backed coding-agent providers. Configure via `autogit config` or environment variables.
 
 | Provider | Env Variable | Default Model | Free Tier |
 |---|---|---|---|
@@ -91,6 +91,9 @@ AutoGit supports 13 AI providers. Configure via `autogit config` or environment 
 | **DeepInfra** | `DEEPINFRA_API_KEY` | `deepseek-ai/DeepSeek-V3.2` | — |
 | **Hugging Face Inference** | `HUGGINGFACE_API_KEY` or `HF_TOKEN` | `openai/gpt-oss-120b:fastest` | ✔ Limited |
 | **Fireworks AI** | `FIREWORKS_API_KEY` | `accounts/fireworks/models/llama-v3p1-8b-instruct` | — |
+| **Codex** | ChatGPT browser sign-in | ChatGPT subscription | subscription quota |
+| **Claude Code** | Claude browser sign-in | Claude subscription | subscription quota |
+| **Antigravity** | Google browser sign-in | Google account subscription | account quota |
 | **Custom OpenAI-compatible** | `CUSTOM_API_KEY` | your model | — |
 
 **Recommended for free usage:** [Groq](https://console.groq.com) — fastest free API, no credit card required. [NVIDIA NIM](https://build.nvidia.com) also provides free credits on signup.

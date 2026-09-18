@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { loadConfig, saveConfig, type AutoGitConfig, type AIProviderName } from '../config/manager.js';
 import { getConfigPath } from '../utils/platform.js';
-import { listProviders, getProvider } from '../ai/provider.js';
+import { listProviders, getProvider, isOAuthAgentProvider } from '../ai/provider.js';
 import { logger, spinner } from '../utils/logger.js';
 
 // Keys that hold API secrets — masked in display
@@ -67,6 +67,9 @@ const PROVIDER_FIELDS: Record<
   deepinfra:   [{ label: 'DeepInfra API Key', key: 'deepinfraKey', hint: 'DEEPINFRA_API_KEY' }],
   huggingface: [{ label: 'Hugging Face token', key: 'huggingfaceKey', hint: 'HUGGINGFACE_API_KEY or HF_TOKEN' }],
   fireworks:   [{ label: 'Fireworks API Key', key: 'fireworksKey', hint: 'FIREWORKS_API_KEY' }],
+  codex: [],
+  'claude-code': [],
+  antigravity: [],
   custom: [
     { label: 'API endpoint  (e.g. http://localhost:1234/v1 or https://myapi.com/v1)', key: 'customEndpoint', hint: 'CUSTOM_API_ENDPOINT' },
     { label: 'API key  (leave blank for local servers with no auth)',                  key: 'customKey',      hint: 'CUSTOM_API_KEY' },
@@ -221,6 +224,11 @@ export async function configureAI(): Promise<void> {
   saveConfig(config);
   logger.success(`Provider set to "${provider}" — config saved`);
   logger.blank();
+
+  if (isOAuthAgentProvider(provider)) {
+    logger.dimmed('This provider uses its own browser sign-in and subscription quota. AutoGit setup installs it and opens its sign-in on first use.');
+    return;
+  }
 
   // ── Verify the key immediately ───────────────────────────────────────────
   await testCurrentProvider();
