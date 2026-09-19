@@ -21,15 +21,12 @@ export interface AgentPromptLaunch {
   output: 'text' | 'antigravity-stream';
 }
 
-export function buildAgentPromptLaunch(agent: CodingAgent, prompt: string, timeout = '5m', acceptEdits = false): AgentPromptLaunch {
+export function buildAgentPromptLaunch(agent: CodingAgent, prompt: string, timeout = '5m'): AgentPromptLaunch {
   if (agent === 'codex') return { executable: 'codex', args: ['exec', '-'], input: prompt, output: 'text' };
   if (agent === 'claude-code') return { executable: 'claude', args: ['-p'], input: prompt, output: 'text' };
   return {
     executable: 'agy',
-    args: [
-      '--input-format', 'stream-json', '--output-format', 'stream-json', '--print-timeout', timeout,
-      ...(acceptEdits ? ['--mode=accept-edits'] : []),
-    ],
+    args: ['--input-format', 'stream-json', '--output-format', 'stream-json', '--print-timeout', timeout],
     input: `${JSON.stringify({ event: 'user', message: { content: prompt } })}\n`,
     output: 'antigravity-stream',
   };
@@ -68,7 +65,7 @@ export async function resolveAgentExecutable(agent: CodingAgent, pathPrefix = ''
 export async function runAgentPrompt(
   agent: CodingAgent,
   prompt: string,
-  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number; maxBuffer?: number; acceptEdits?: boolean },
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number; maxBuffer?: number; onConversationId?: (id: string) => void },
 ): Promise<string> {
   const executablePath = await resolveAgentExecutable(agent);
   if (!executablePath) {
@@ -77,7 +74,7 @@ export async function runAgentPrompt(
     throw error;
   }
 
-  const launch = buildAgentPromptLaunch(agent, prompt, '5m', options.acceptEdits);
+  const launch = buildAgentPromptLaunch(agent, prompt);
   const isBatch = process.platform === 'win32' && /\.(cmd|bat)$/i.test(executablePath);
   const executable = isBatch ? (process.env.ComSpec || 'cmd.exe') : executablePath;
   const args = isBatch ? ['/d', '/s', '/c', executablePath, ...launch.args] : launch.args;
@@ -118,7 +115,15 @@ export async function runAgentPrompt(
       if (outputSize > maxBuffer) return reject(new Error(`${agent} output exceeded ${maxBuffer} bytes`));
       const errorText = Buffer.concat(stderr).toString('utf8').trim();
       if (code !== 0) return reject(new Error(errorText || `${agent} exited with code ${code}`));
-      try { resolve(parseAgentOutput(launch, Buffer.concat(stdout).toString('utf8'))); }
+      try {
+        const output = Buffer.concat(stdout).toString('utf8');
+        if (launch.output === 'antigravity-stream') {
+          const init = output.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line))
+            .find(event => event.event === 'init');
+          if (init?.conversation_id) options.onConversationId?.(String(init.conversation_id));
+        }
+        resolve(parseAgentOutput(launch, output));
+      }
       catch (error) { reject(error); }
     });
     child.stdin.end(launch.input);

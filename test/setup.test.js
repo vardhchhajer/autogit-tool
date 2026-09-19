@@ -98,12 +98,6 @@ test('OAuth text-generation prompts avoid Windows command arguments', () => {
   }
 });
 
-test('Antigravity image generation permits project file creation without unrestricted permissions', () => {
-  const launch = buildAgentPromptLaunch('antigravity', 'Create an image', '5m', true);
-  assert.ok(launch.args.includes('--mode=accept-edits'));
-  assert.equal(launch.args.includes('--dangerously-skip-permissions'), false);
-});
-
 test('local Ollama maps to OpenCode without an API key', () => {
   const prior = { AUTOGIT_AI_MODEL: process.env.AUTOGIT_AI_MODEL, OLLAMA_ENDPOINT: process.env.OLLAMA_ENDPOINT };
   try {

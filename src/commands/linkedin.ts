@@ -103,8 +103,8 @@ export async function cmdLinkedin(opts: { screenshotUrl?: string; promoImage?: b
   }
   if (promoImage) {
     const path = defaultSocialImagePath(analysis, 'artwork');
-    await generatePromotionalArtwork(analysis, path, typeof promoImage === 'string' ? promoImage : undefined);
-    logger.success(`Promotional artwork saved: ${path}`);
+    const savedPath = await generatePromotionalArtwork(analysis, path, typeof promoImage === 'string' ? promoImage : undefined);
+    logger.success(`Promotional artwork saved: ${savedPath}`);
   }
   if (showcaseCards) {
     const base = collectShowcaseFacts(rootDir, scan, analysis);

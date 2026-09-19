@@ -323,8 +323,8 @@ async function handleSocialContent(
     }
     if (promoImage) {
       const path = join(shareDirectory, 'artwork.png');
-      await generatePromotionalArtwork(analysis, path);
-      logger.success(`Artwork saved: ${path}`);
+      const savedPath = await generatePromotionalArtwork(analysis, path);
+      logger.success(`Artwork saved: ${savedPath}`);
     }
   }
 

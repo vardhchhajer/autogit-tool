@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { captureProjectScreenshot, generatePromotionalArtwork } from '../dist/services/social-images.js';
@@ -101,25 +101,31 @@ test('artwork supports Antigravity subscription image generation', async t => {
   const root = mkdtempSync(join(tmpdir(), 'autogit-antigravity-art-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const originalProvider = process.env.AUTOGIT_IMAGE_PROVIDER;
+  const originalHome = process.env.USERPROFILE;
   process.env.AUTOGIT_IMAGE_PROVIDER = 'antigravity';
-  t.after(() => originalProvider === undefined
-    ? delete process.env.AUTOGIT_IMAGE_PROVIDER
-    : process.env.AUTOGIT_IMAGE_PROVIDER = originalProvider);
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  process.env.USERPROFILE = root;
+  t.after(() => {
+    originalProvider === undefined ? delete process.env.AUTOGIT_IMAGE_PROVIDER : process.env.AUTOGIT_IMAGE_PROVIDER = originalProvider;
+    originalHome === undefined ? delete process.env.USERPROFILE : process.env.USERPROFILE = originalHome;
+  });
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
   let options;
   const runner = async (agent, prompt, receivedOptions) => {
     assert.equal(agent, 'antigravity');
     assert.match(prompt, /built-in image generation tool/);
     options = receivedOptions;
-    const filename = JSON.parse(prompt.match(/directly as ("[^"]+")/)[1]);
-    writeFileSync(join(receivedOptions.cwd, filename), png);
+    const artifactDirectory = join(root, '.gemini', 'antigravity-cli', 'brain', 'test-session');
+    mkdirSync(artifactDirectory, { recursive: true });
+    writeFileSync(join(artifactDirectory, 'generated.jpg'), jpeg);
+    receivedOptions.onConversationId('test-session');
     return 'done';
   };
   const output = join(root, 'art.png');
-  await generatePromotionalArtwork({ name: 'Sample', displayName: 'Sample', description: '', languages: [], frameworks: [] }, output, undefined, runner);
-  assert.equal(options.acceptEdits, true);
+  const saved = await generatePromotionalArtwork({ name: 'Sample', displayName: 'Sample', description: '', languages: [], frameworks: [] }, output, undefined, runner);
+  assert.equal(saved, join(root, 'art.jpg'));
+  assert.equal(options.acceptEdits, undefined);
   assert.equal(options.env.GEMINI_API_KEY, undefined);
-  assert.deepEqual(readFileSync(output), png);
+  assert.deepEqual(readFileSync(saved), jpeg);
 });
 
 test('artwork supports xAI, Together, and custom image APIs', async t => {
