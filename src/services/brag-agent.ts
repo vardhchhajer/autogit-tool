@@ -6,7 +6,7 @@ import { ensureBragRuntime } from './brag-runtime.js';
 import { delimiter, join } from 'path';
 import { homedir } from 'os';
 import { existsSync, readdirSync, statSync } from 'fs';
-import { buildAgentPromptLaunch } from './coding-agent.js';
+import { buildAgentPromptLaunch, parseAgentOutput, type AgentPromptLaunch } from './coding-agent.js';
 import { logger, spinner } from '../utils/logger.js';
 
 const run = promisify(execFile);
@@ -127,6 +127,7 @@ export interface BragLaunch {
   args: string[];
   env: NodeJS.ProcessEnv;
   input?: string;
+  output?: AgentPromptLaunch['output'];
 }
 
 export function buildBragLaunch(provider: AIProviderName, prompt: string, preferred: BragAgentPreference = 'automatic'): BragLaunch {
@@ -134,12 +135,9 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string, prefer
   const agent = selectBragAgent(provider, preferred);
   const env = agentEnv();
   // Native agents use their own saved OAuth session, not AutoGit API credentials.
-  if (agent === 'codex' || agent === 'claude-code') {
-    const launch = buildAgentPromptLaunch(agent, prompt, '10m');
-    return { agent, executable: launch.executable, args: launch.args, input: launch.input, env };
-  }
-  if (agent === 'antigravity') {
-    return { agent, executable: 'agy', args: ['-p', prompt, '--print-timeout', '10m'], env };
+  if (agent === 'codex' || agent === 'claude-code' || agent === 'antigravity') {
+    const launch = buildAgentPromptLaunch(agent, prompt, '30m');
+    return { agent, ...launch, env };
   }
   const keyFields: Partial<Record<AIProviderName, [string, string | undefined]>> = {
     openai: ['OPENAI_API_KEY', ai.openaiKey],
@@ -193,11 +191,23 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string, prefer
 
 export interface BragResult { outputDirectory: string; videoPath: string }
 
+export function buildBragPrompt(): string {
+  return [
+    'Use the installed brag skill to inspect this project and produce its launch video and share copy.',
+    'The user has explicitly requested the finished video. This is a noninteractive run: rendering is already requested; do not stop for preview approval or start a persistent preview server.',
+    'Complete all steps: storyboard, composition, Hyperframes check (fix every error), render brag.mp4, poster brag.jpg, and share-copy.txt in a new timestamped brag-output directory directly inside the current working directory.',
+    'Run the render command and wait for it to finish. Verify that brag.mp4 is nonempty before reporting success. Planning files or an HTML composition alone are not a completed video.',
+    'If a tool, permission, dependency, or render fails, report the exact blocker and command error. Never claim completion without the video.',
+    'Do not invent features, results, or UI. For CLI, API, library, or data projects, use real documented commands, requests, and usage; label demonstrations and do not fabricate execution results.',
+    'Do not modify project source files. Return the final video path.',
+  ].join('\n');
+}
+
 export function findBragResult(root: string, createdAfter = 0): BragResult {
   const videos = readdirSync(root, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && /^brag-output(?:-|$)/.test(entry.name))
     .map(entry => ({ outputDirectory: join(root, entry.name), videoPath: join(root, entry.name, 'brag.mp4') }))
-    .filter(result => existsSync(result.videoPath) && statSync(result.videoPath).mtimeMs >= createdAfter)
+    .filter(result => existsSync(result.videoPath) && statSync(result.videoPath).isFile() && statSync(result.videoPath).size > 0 && statSync(result.videoPath).mtimeMs >= createdAfter)
     .sort((a, b) => statSync(b.videoPath).mtimeMs - statSync(a.videoPath).mtimeMs);
   if (!videos[0]) throw new Error('Brag finished without creating a new brag.mp4 video');
   return videos[0];
@@ -210,7 +220,7 @@ export async function runBragInProject(root: string): Promise<BragResult> {
   if (config.setup?.brag !== 'installed' || config.setup.agent !== agent) {
     throw new Error(`Brag is not installed for ${agent}. Run autogit setup first.`);
   }
-  const prompt = 'Use the installed brag skill to inspect this project and produce its launch video and share copy. Do not invent features, results, or UI that the project does not have. For a CLI, API, library, or data project, show real commands, requests, usage, or verified results instead of a fake app screenshot. Do not modify project source files.';
+  const prompt = buildBragPrompt();
   const launch = buildBragLaunch(provider, prompt, agent);
   const runtimeSpin = spinner('Preparing Brag runtime...').start();
   let runtime;
@@ -236,6 +246,7 @@ export async function runBragInProject(root: string): Promise<BragResult> {
   }, 1_000);
   timer.unref();
   let output = '';
+  let stderr = '';
   try {
     await new Promise<void>((resolve, reject) => {
       const child = spawn(executable, args, {
@@ -246,19 +257,28 @@ export async function runBragInProject(root: string): Promise<BragResult> {
       });
       child.once('error', reject);
       child.stdout.on('data', chunk => { output = `${output}${chunk}`.slice(-64 * 1024); });
-      child.stderr.on('data', chunk => { output = `${output}${chunk}`.slice(-64 * 1024); });
-      child.once('exit', code => code === 0 ? resolve() : reject(new Error(
-        `${launch.agent} exited with code ${code}${output.trim() ? `: ${output.trim().slice(-1_000)}` : ''}`
+      child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-64 * 1024); });
+      child.once('close', code => code === 0 ? resolve() : reject(new Error(
+        `${launch.agent} exited with code ${code}: ${(stderr || output).trim().slice(-2_000)}`
       )));
+      child.stdin.on('error', reject);
       child.stdin?.end(launch.input);
     });
+    // Streaming agents report failed turns even when their process exits successfully.
+    if (launch.output === 'antigravity-stream') {
+      const events = output.split(/\r?\n/).filter(line => {
+        try { return JSON.parse(line).event === 'result'; } catch { return false; }
+      });
+      output = parseAgentOutput({ output: launch.output }, events.join('\n'));
+    }
     const result = findBragResult(root, started - 2_000);
     generateSpin.succeed(`Brag video generated in ${Math.max(1, Math.round((Date.now() - started) / 1000))}s`);
     if (output.trim()) logger.verbose(output.trim());
     return result;
   } catch (error) {
     generateSpin.fail('Brag video generation failed');
-    throw error;
+    const detail = output.trim() || stderr.trim();
+    throw new Error(`${error instanceof Error ? error.message : String(error)}${detail ? `\nAgent response: ${detail.slice(-4_000)}` : ''}`);
   } finally {
     clearInterval(timer);
   }

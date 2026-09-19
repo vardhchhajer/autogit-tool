@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { shouldRunFirstSetup } from '../dist/commands/setup.js';
 import { agentPackageName, bragSkillInstallCommand, buildBragLaunch, findBragResult, selectBragAgent } from '../dist/services/brag-agent.js';
 import { isOAuthAgentProvider, listProviders } from '../dist/ai/provider.js';
-import { buildAgentPromptLaunch } from '../dist/services/coding-agent.js';
+import { buildAgentPromptLaunch, parseAgentOutput } from '../dist/services/coding-agent.js';
+import { buildBragPrompt } from '../dist/services/brag-agent.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +21,9 @@ test('Brag reports the newly rendered video directory', t => {
   const videoPath = join(directory, 'brag.mp4');
   writeFileSync(videoPath, 'video');
   assert.deepEqual(findBragResult(root), { outputDirectory: directory, videoPath });
+  assert.throws(() => findBragResult(root, Date.now() + 60_000), /without creating/);
+  writeFileSync(videoPath, '');
+  assert.throws(() => findBragResult(root), /without creating/);
 });
 
 test('Brag agent follows the selected provider', () => {
@@ -97,9 +101,21 @@ test('Antigravity uses its own OAuth session in headless prompt mode', () => {
   const launch = buildBragLaunch('gemini', 'Make a video', 'antigravity');
   assert.equal(launch.agent, 'antigravity');
   assert.equal(launch.executable, 'agy');
-  assert.deepEqual(launch.args.slice(0, 2), ['-p', 'Make a video']);
-  assert.equal(launch.input, undefined);
+  assert.ok(launch.args.includes('stream-json'));
+  assert.ok(launch.args.includes('30m'));
+  assert.equal(JSON.parse(launch.input).message.content, 'Make a video');
   assert.equal(launch.env.GEMINI_API_KEY, undefined);
+});
+
+test('Brag requests completed rendering and preserves agent turn failures', () => {
+  assert.match(buildBragPrompt(), /do not stop for preview approval/);
+  assert.match(buildBragPrompt(), /Run the render command and wait/);
+  assert.throws(() => parseAgentOutput({ output: 'antigravity-stream' }, JSON.stringify({
+    event: 'result', result: { status: 'ERROR', error: 'Render permission denied' },
+  })), /Render permission denied/);
+  assert.equal(parseAgentOutput({ output: 'antigravity-stream' }, JSON.stringify({
+    event: 'result', result: { status: 'SUCCESS', response: 'Rendered brag.mp4' },
+  })), 'Rendered brag.mp4');
 });
 
 test('OAuth text-generation prompts avoid Windows command arguments', () => {

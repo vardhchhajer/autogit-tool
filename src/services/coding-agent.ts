@@ -32,7 +32,7 @@ export function buildAgentPromptLaunch(agent: CodingAgent, prompt: string, timeo
   };
 }
 
-function parseAgentOutput(launch: AgentPromptLaunch, stdout: string): string {
+export function parseAgentOutput(launch: Pick<AgentPromptLaunch, 'output'>, stdout: string): string {
   if (launch.output === 'text') return stdout.trim();
   const events = stdout.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
   const result = [...events].reverse().find(event => event.event === 'result')?.result;
