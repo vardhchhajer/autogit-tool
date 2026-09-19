@@ -15,6 +15,19 @@ test('single nested project is selected from a wrapper folder', () => {
   assert.deepEqual(resolveProjectDirectory(wrapper), { root: project, discovered: true });
 });
 
+test('single project is found through nested wrapper folders', () => {
+  const wrapper = mkdtempSync(join(tmpdir(), 'autogit-deep-wrapper-'));
+  mkdirSync(join(wrapper, '.git'));
+  const project = join(wrapper, 'source', 'project');
+  mkdirSync(project, { recursive: true });
+  writeFileSync(join(project, 'app.csproj'), '<Project />');
+  assert.deepEqual(resolveProjectDirectory(wrapper), { root: project, discovered: true });
+});
+
+test('home directory is never accepted as a project', () => {
+  assert.throws(() => resolveProjectDirectory(process.platform === 'win32' ? process.env.USERPROFILE : process.env.HOME), /home directory/);
+});
+
 test('current project root is kept when it has a manifest', () => {
   const project = mkdtempSync(join(tmpdir(), 'autogit-project-'));
   writeFileSync(join(project, 'package.json'), JSON.stringify({ name: 'current-project' }));

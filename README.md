@@ -27,7 +27,7 @@ When you run `autogit` inside a project directory it:
 7. Generates a LinkedIn post, X (Twitter) post, DEV.to draft, and resume bullet
 8. Saves a share package with a sourced LinkedIn post, text drafts, evidence, and three PNG cards; offers a Brag video when its optional setup is installed
 
-The share package is saved under `~/.autogit/social/<project>/`. LinkedIn publishing and image upload still require your review. Destructive or public-facing Git actions require confirmation; pass `--yes` to skip prompts.
+The share package is saved under `~/.autogit/social/<project>/`. LinkedIn publishing and image upload still require your review. Destructive or public-facing Git actions require confirmation; pass `--yes` to skip prompts. AutoGit can be run from a wrapper containing one project, but refuses to treat your user home directory as a project.
 
 The main run creates three evidence cards automatically, including for CLI, API, and library projects. A real screenshot is optional and only applies when a web app is currently reachable at an HTTP(S) URL; leave the URL blank to skip it. Conceptual artwork is available with `autogit --promo-image` when an image provider is configured.
 
