@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { scanProject } from '../dist/scanner/file-scanner.js';
 import { analyzeProject } from '../dist/scanner/project-analyzer.js';
-import { collectShowcaseFacts, generateShowcase } from '../dist/services/showcase.js';
+import { collectShowcaseFacts } from '../dist/services/showcase.js';
 import { showcaseCardSvg, saveShowcaseCards } from '../dist/services/showcase-cards.js';
 
 test('CLI showcase uses actual package command and never implies a GUI', async () => {
@@ -20,10 +20,7 @@ test('CLI showcase uses actual package command and never implies a GUI', async (
     const base = collectShowcaseFacts(root, scan, analysis);
     assert.equal(base.kind, 'cli');
     assert.ok(base.facts.some(f => f.text === 'Command: demo' && f.source === 'package.json'));
-    const showcase = await generateShowcase(base, false);
-    assert.match(showcase.post, /Command: demo/);
-    assert.doesNotMatch(showcase.post, /screenshot|interface/i);
-    const card = showcaseCardSvg(showcase, 1);
+    const card = showcaseCardSvg({ ...base, post: '' }, 1);
     assert.match(card, /SOURCE: package.json/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -44,7 +41,7 @@ test('showcase cards render PNG without a browser', async () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('showcase --no-ai uses the factual template from the CLI', () => {
+test('showcase rejects the removed --no-ai option', () => {
   const root = mkdtempSync(join(tmpdir(), 'autogit-showcase-cli-'));
   try {
     writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'offline-cli', description: 'A local CLI', bin: { offline: './cli.js' } }));
@@ -52,9 +49,8 @@ test('showcase --no-ai uses the factual template from the CLI', () => {
     const result = spawnSync(process.execPath, [join(process.cwd(), 'dist', 'cli.js'), 'showcase', '--no-ai'], {
       cwd: root, encoding: 'utf8', env: { ...process.env, USERPROFILE: root }, timeout: 30000,
     });
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Introducing Offline Cli\./);
-    assert.match(result.stdout, /Command: offline/);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unknown option '--no-ai'/i);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

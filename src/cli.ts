@@ -47,7 +47,6 @@ program
   .option('--skip-resume', 'Skip resume auto-update')
   .option('--screenshot-url <url>', 'Capture a real app screenshot for the share package')
   .option('--promo-image', 'Generate conceptual promotional artwork for the share package')
-  .option('--no-ai', 'Disable AI-powered generation')
   .option('--force', 'Force overwrite existing files')
   .option('--regenerate', 'Regenerate existing documentation')
   .action(async (opts) => {
@@ -62,7 +61,6 @@ program
         skipResume: opts.skipResume,
         screenshotUrl: opts.screenshotUrl,
         promoImage: opts.promoImage,
-        noAI: !opts.ai,
         force: opts.force,
         regenerate: opts.regenerate,
         private: opts.private,
@@ -106,7 +104,6 @@ program
   .command('docs')
   .description('Generate project documentation')
   .option('--regenerate', 'Regenerate existing docs')
-  .option('--no-ai', 'Disable AI generation')
   .action(async (opts) => {
     try { await cmdDocs(opts); } catch (e: any) { handleError(e); }
   });
@@ -115,7 +112,6 @@ program
   .command('readme')
   .description('Generate or update README')
   .option('--regenerate', 'Force regenerate README')
-  .option('--no-ai', 'Disable AI generation')
   .action(async (opts) => {
     try { await cmdReadme(opts); } catch (e: any) { handleError(e); }
   });
@@ -142,20 +138,18 @@ program
 program
   .command('linkedin')
   .description('Generate LinkedIn posts')
-  .option('--no-ai', 'Use template generation')
   .option('--screenshot-url <url>', 'Capture a real screenshot of a running app')
   .option('--promo-image [direction]', 'Generate conceptual promotional artwork')
   .option('--showcase-cards', 'Create project evidence cards for the post')
   .action(async (opts) => {
-    try { await cmdLinkedin({ ...opts, ai: opts.ai !== false && program.opts().ai !== false }); } catch (e: any) { handleError(e); }
+    try { await cmdLinkedin(opts); } catch (e: any) { handleError(e); }
   });
 
 program
   .command('showcase')
   .description('Create a sourced project post and shareable image cards')
-  .option('--no-ai', 'Use a factual template instead of AI')
-  .action(async (opts) => {
-    try { await cmdShowcase({ ...opts, ai: opts.ai !== false && program.opts().ai !== false }); } catch (e: any) { handleError(e); }
+  .action(async () => {
+    try { await cmdShowcase(); } catch (e: any) { handleError(e); }
   });
 
 program
@@ -170,9 +164,8 @@ program
 program
   .command('analyze')
   .description('Analyze project and show insights')
-  .option('--no-ai', 'Static analysis only')
-  .action(async (opts) => {
-    try { await cmdAnalyze(opts); } catch (e: any) { handleError(e); }
+  .action(async () => {
+    try { await cmdAnalyze(); } catch (e: any) { handleError(e); }
   });
 
 program
@@ -201,7 +194,6 @@ program
   .option('--show', 'Show current resume configuration')
   .option('--file <path>', 'Quickly set a new .tex resume file path')
   .option('--from-pdf <path>', 'Convert a PDF resume to LaTeX format and set as resume')
-  .option('--no-ai', 'Use template instead of AI for bullet generation')
   .action(async (opts) => {
     try { await cmdResume(opts); } catch (e: any) { handleError(e); }
   });

@@ -5,16 +5,14 @@ import { generateReadme, writeReadme, displayDiff } from '../services/readme-man
 import { logger } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
 
-export async function cmdReadme(opts: { ai?: boolean; regenerate?: boolean }): Promise<void> {
+export async function cmdReadme(opts: { regenerate?: boolean }): Promise<void> {
   const rootDir = resolveProjectDirectory().root;
 
   logger.header('README Generator');
 
   const scan    = scanProject(rootDir);
   const analysis = await analyzeProject(rootDir, scan);
-  const useAI = opts.ai !== false;
-
-  const result = await generateReadme(rootDir, analysis, useAI, scan);
+  const result = await generateReadme(rootDir, analysis, true, scan);
 
   if (!result.isNew && !result.diff) {
     logger.success('README is already up to date');

@@ -10,13 +10,13 @@ import { getConfigDir } from '../utils/platform.js';
 import { logger } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
 
-export async function cmdShowcase(opts: { ai?: boolean }): Promise<void> {
+export async function cmdShowcase(): Promise<void> {
   const root = resolveProjectDirectory().root;
   logger.header('Project Showcase');
   const scan = scanProject(root);
   const analysis = await analyzeProject(root, scan);
   const base = collectShowcaseFacts(root, scan, analysis);
-  const showcase = await generateShowcase(base, opts.ai !== false);
+  const showcase = await generateShowcase(base, true);
   const git = await getGitStatus(root);
   const link = git.remoteUrl ? remoteWebUrl(git.remoteUrl) : undefined;
   const post = showcase.post.replace(/\[PROJECT_LINK\]/g, link || '[ADD_PROJECT_URL]');

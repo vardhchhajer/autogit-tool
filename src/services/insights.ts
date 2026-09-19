@@ -72,7 +72,7 @@ export async function generateInsights(
     }
   }
 
-  // Static analysis is used only when explicitly requested with --no-ai.
+  // Kept for internal callers that explicitly disable AI.
   return generateStaticInsights(analysis, scan);
 }
 

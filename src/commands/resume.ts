@@ -16,7 +16,6 @@ import { logger, spinner } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export interface ResumeCommandOpts {
-  ai?: boolean;
   setup?: boolean;
   show?: boolean;
   file?: string;
@@ -52,7 +51,7 @@ export async function cmdResume(opts: ResumeCommandOpts): Promise<void> {
     if (!updated.resume?.path) return;
   }
 
-  await runResumeUpdate(resolveProjectDirectory().root, opts.ai !== false, true);
+  await runResumeUpdate(resolveProjectDirectory().root, true, true);
 }
 
 // ─── PDF to LaTeX converter ───────────────────────────────────────────────────
@@ -231,7 +230,6 @@ export async function runResumeUpdate(
       choices: [
         { name: 'Add to resume',            value: 'add' },
         { name: 'Regenerate entry',         value: 'regen' },
-        { name: 'Regenerate without AI',    value: 'regen_noai' },
         { name: 'Skip',                     value: 'skip' },
       ],
       default: 'add',
@@ -239,9 +237,9 @@ export async function runResumeUpdate(
 
     if (action === 'skip') { logger.dimmed('Skipped.'); return; }
 
-    if (action === 'regen' || action === 'regen_noai') {
+    if (action === 'regen') {
       const regenEntry = await generateLatexProjectEntry(
-        analysis, action === 'regen', ownerName, scan, projectDir
+        analysis, true, ownerName, scan, projectDir
       );
       console.log(chalk.dim('─'.repeat(60)));
       console.log(regenEntry);

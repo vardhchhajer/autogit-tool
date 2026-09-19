@@ -33,14 +33,14 @@ test('main-run share package saves sourced post and cards with verified URL only
   }
 });
 
-test('main command dry-run previews the share package without writing it', () => {
+test('main command rejects the removed --no-ai option', () => {
   const root = mkdtempSync(join(tmpdir(), 'autogit-main-dry-'));
   try {
     writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'demo', description: 'A demo project' }));
-    const run = spawnSync(process.execPath, [join(process.cwd(), 'dist', 'cli.js'), '--dry-run', '--no-ai', '--skip-resume'], {
+    const run = spawnSync(process.execPath, [join(process.cwd(), 'dist', 'cli.js'), '--no-ai'], {
       cwd: root, encoding: 'utf8', timeout: 30000,
     });
-    assert.equal(run.status, 0, run.stderr);
-    assert.match(run.stdout, /Would create a share package/);
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /unknown option '--no-ai'/i);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

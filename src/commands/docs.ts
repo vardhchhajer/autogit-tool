@@ -4,16 +4,14 @@ import { generateDocs, writeDocs } from '../services/docs-generator.js';
 import { logger } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
 
-export async function cmdDocs(opts: { ai?: boolean; regenerate?: boolean }): Promise<void> {
+export async function cmdDocs(opts: { regenerate?: boolean }): Promise<void> {
   const rootDir = resolveProjectDirectory().root;
 
   logger.header('Generate Documentation');
 
   const scan = scanProject(rootDir);
   const analysis = await analyzeProject(rootDir, scan);
-  const useAI = opts.ai !== false;
-
-  const docs = await generateDocs(rootDir, analysis, scan, useAI, opts.regenerate);
+  const docs = await generateDocs(rootDir, analysis, scan, true, opts.regenerate);
 
   if (docs.length === 0) {
     logger.info('All documentation files already exist. Use --regenerate to update.');

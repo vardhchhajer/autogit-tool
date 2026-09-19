@@ -24,7 +24,6 @@ export interface PipelineOptions {
   skipLinkedin?: boolean;
   skipGithub?: boolean;
   skipResume?: boolean;
-  noAI?: boolean;
   force?: boolean;
   regenerate?: boolean;
   private?: boolean;
@@ -61,7 +60,7 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   displayProjectInfo(analysis);
   logger.blank();
 
-  const useAI = !options.noAI;
+  const useAI = true;
   let resolvedRepoUrl: string | undefined;
   let published = false;
 

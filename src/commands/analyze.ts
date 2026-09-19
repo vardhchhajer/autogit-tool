@@ -6,14 +6,13 @@ import { generateInsights } from '../services/insights.js';
 import { logger } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
 
-export async function cmdAnalyze(opts: { ai?: boolean }): Promise<void> {
+export async function cmdAnalyze(): Promise<void> {
   const rootDir = resolveProjectDirectory().root;
 
   logger.header('Project Analysis');
 
   const scan = scanProject(rootDir);
   const analysis = await analyzeProject(rootDir, scan);
-  const useAI = opts.ai !== false;
 
   // Display project info
   const infoTable = new Table({
@@ -36,7 +35,7 @@ export async function cmdAnalyze(opts: { ai?: boolean }): Promise<void> {
   logger.blank();
 
   // Generate insights
-  const insights = await generateInsights(analysis, scan, useAI);
+  const insights = await generateInsights(analysis, scan, true);
 
   // Scores table
   logger.header('Scores');

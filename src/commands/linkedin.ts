@@ -13,7 +13,7 @@ import { remoteWebUrl } from '../services/publish-workflow.js';
 import { logger } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
 
-export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; promoImage?: boolean | string; showcaseCards?: boolean }): Promise<void> {
+export async function cmdLinkedin(opts: { screenshotUrl?: string; promoImage?: boolean | string; showcaseCards?: boolean }): Promise<void> {
   const projectDirectory = resolveProjectDirectory();
   const rootDir = projectDirectory.root;
 
@@ -22,9 +22,7 @@ export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; 
 
   const scan = scanProject(rootDir);
   const analysis = await analyzeProject(rootDir, scan);
-  const useAI = opts.ai !== false;
-
-  const content = await generateSocialContent(analysis, useAI);
+  const content = await generateSocialContent(analysis, true);
 
   // Replace GitHub link placeholder
   const gitStatus = await getGitStatus(rootDir);
