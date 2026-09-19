@@ -29,7 +29,7 @@ When you run `autogit` inside a project directory it:
 
 The share package is saved under `~/.autogit/social/<project>/`. LinkedIn publishing and image upload still require your review. Destructive or public-facing Git actions require confirmation; pass `--yes` to skip prompts.
 
-The main run creates three evidence cards automatically. It can also add a real screenshot from a running web app with `autogit --screenshot-url http://localhost:3000`, or conceptual artwork with `autogit --promo-image` when OpenAI image generation is configured. Interactive runs offer these choices after the share package is created.
+The main run creates three evidence cards automatically, including for CLI, API, and library projects. A real screenshot is optional and only applies when a web app is currently reachable at an HTTP(S) URL; leave the URL blank to skip it. Conceptual artwork is also available with `autogit --promo-image` when OpenAI image generation is configured.
 
 ---
 

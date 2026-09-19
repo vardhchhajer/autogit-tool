@@ -1,8 +1,6 @@
-import { getAIConfig } from '../config/manager.js';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { getAIConfig, getAIModel } from '../config/manager.js';
+import { runAgentPrompt } from '../services/coding-agent.js';
 
-const run = promisify(execFile);
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -97,7 +95,7 @@ class OpenAIProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'gpt-4o-mini';
+    const model = getAIModel('openai', 'gpt-4o-mini')!;
     const content = await openAICompatPost(
       'https://api.openai.com/v1/chat/completions',
       cfg.openaiKey!,
@@ -115,7 +113,7 @@ class AnthropicProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'claude-sonnet-4-20250514';
+    const model = getAIModel('anthropic', 'claude-sonnet-4-20250514')!;
 
     const systemMsg = messages.find(m => m.role === 'system');
     const userMessages = messages.filter(m => m.role !== 'system');
@@ -148,7 +146,7 @@ class GeminiProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'gemini-1.5-flash';
+    const model = getAIModel('gemini', 'gemini-3.8-flash')!;
 
     const contents = messages
       .filter(m => m.role !== 'system')
@@ -174,7 +172,12 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) throw new Error(`Gemini ${response.status}: ${await response.text()}`);
     const data = (await response.json()) as any;
-    return { content: data.candidates[0].content.parts[0].text, provider: 'gemini', model };
+    const content = data.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('').trim();
+    if (!content) {
+      const reason = data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'empty response';
+      throw new Error(`Gemini returned no text (${reason})`);
+    }
+    return { content, provider: 'gemini', model };
   }
 }
 
@@ -184,7 +187,7 @@ class OllamaProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'llama3.1';
+    const model = getAIModel('ollama', 'llama3.1')!;
 
     const response = await fetch(`${cfg.ollamaEndpoint}/api/chat`, {
       method: 'POST',
@@ -209,7 +212,7 @@ class OpenRouterProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'anthropic/claude-sonnet-4-20250514';
+    const model = getAIModel('openrouter', 'anthropic/claude-sonnet-4-20250514')!;
     const content = await openAICompatPost(
       'https://openrouter.ai/api/v1/chat/completions',
       cfg.openrouterKey!,
@@ -229,7 +232,7 @@ class MistralProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'mistral-large-latest';
+    const model = getAIModel('mistral', 'mistral-large-latest')!;
     const content = await openAICompatPost(
       'https://api.mistral.ai/v1/chat/completions',
       cfg.mistralKey!,
@@ -248,7 +251,7 @@ class GroqProvider implements AIProvider {
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
     // Groq's fastest capable model as default
-    const model = cfg.model || 'llama-3.3-70b-versatile';
+    const model = getAIModel('groq', 'openai/gpt-oss-120b')!;
     const content = await openAICompatPost(
       'https://api.groq.com/openai/v1/chat/completions',
       cfg.groqKey!,
@@ -266,7 +269,7 @@ class DeepSeekProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'deepseek-chat';
+    const model = getAIModel('deepseek', 'deepseek-chat')!;
     const content = await openAICompatPost(
       'https://api.deepseek.com/v1/chat/completions',
       cfg.deepseekKey!,
@@ -284,7 +287,7 @@ class PerplexityProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'llama-3.1-sonar-large-128k-online';
+    const model = getAIModel('perplexity', 'sonar')!;
     const content = await openAICompatPost(
       'https://api.perplexity.ai/chat/completions',
       cfg.perplexityKey!,
@@ -302,7 +305,7 @@ class TogetherProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+    const model = getAIModel('together', 'meta-llama/Llama-3.3-70B-Instruct-Turbo')!;
     const content = await openAICompatPost(
       'https://api.together.xyz/v1/chat/completions',
       cfg.togetherKey!,
@@ -320,7 +323,7 @@ class CohereProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'command-r-plus-08-2024';
+    const model = getAIModel('cohere', 'command-r-plus-08-2024')!;
 
     // Cohere uses a different request shape: system + chat_history + message
     const systemMsg = messages.find(m => m.role === 'system');
@@ -358,7 +361,7 @@ class XAIProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'grok-3-fast-beta';
+    const model = getAIModel('xai', 'grok-4.6')!;
     // xAI's API is OpenAI-compatible
     const content = await openAICompatPost(
       'https://api.x.ai/v1/chat/completions',
@@ -412,7 +415,7 @@ class NvidiaProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || 'meta/llama-3.3-70b-instruct';
+    const model = getAIModel('nvidia', 'nvidia/nemotron-3-super-120b-a12b')!;
     // NVIDIA NIM cold starts can take 90-120s on free tier — use a longer timeout
     const content = await openAICompatPost(
       'https://integrate.api.nvidia.com/v1/chat/completions',
@@ -439,7 +442,7 @@ class HostedOpenAICompatibleProvider implements AIProvider {
 
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
-    const model = cfg.model || this.defaultModel;
+    const model = getAIModel(this.name as any, this.defaultModel)!;
     const content = await openAICompatPost(this.endpoint, this.getKey()!, model, messages, options);
     return { content, provider: this.name, model };
   }
@@ -464,13 +467,10 @@ class OAuthAgentProvider implements AIProvider {
     if (this.name === 'codex') { delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY; }
     if (this.name === 'claude-code') delete env.ANTHROPIC_API_KEY;
     if (this.name === 'antigravity') delete env.GEMINI_API_KEY;
-    const command = this.name === 'codex' ? 'codex' : this.name === 'claude-code' ? 'claude' : 'agy';
-    const args = this.name === 'codex' ? ['exec', instruction]
-      : this.name === 'claude-code' ? ['-p', instruction]
-      : ['-p', instruction, '--print-timeout', '5m'];
     try {
-      const { stdout } = await run(command, args, { cwd: process.cwd(), env, timeout: 360_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
-      const content = stdout.trim();
+      const content = await runAgentPrompt(this.name, instruction, {
+        cwd: process.cwd(), env, timeoutMs: 360_000, maxBuffer: 4 * 1024 * 1024,
+      });
       if (!content) throw new Error(`${this.name} returned no text`);
       return { content, provider: this.name, model: 'subscription' };
     } catch (error: any) {
@@ -495,7 +495,7 @@ class CustomProvider implements AIProvider {
   async generate(messages: AIMessage[], options?: { temperature?: number; maxTokens?: number }): Promise<AIResponse> {
     const cfg = getAIConfig();
     const endpoint = cfg.customEndpoint!.replace(/\/$/, '');
-    const model = cfg.customModelName || cfg.model || 'default';
+    const model = cfg.customModelName || getAIModel('custom', 'default')!;
 
     // Build URL — support both bare base URL and full path
     const url = endpoint.endsWith('/chat/completions')
@@ -585,18 +585,18 @@ export function listProviders(): { name: string; configured: boolean; defaultMod
   const defaults: Record<string, string> = {
     openai:         'gpt-4o-mini',
     anthropic:      'claude-sonnet-4-20250514',
-    gemini:         'gemini-1.5-flash',
+    gemini:         'gemini-3.8-flash',
     ollama:         'llama3.1',
     openrouter:     'anthropic/claude-sonnet-4-20250514',
     mistral:        'mistral-large-latest',
-    groq:           'llama-3.3-70b-versatile',
+    groq:           'openai/gpt-oss-120b',
     deepseek:       'deepseek-chat',
-    perplexity:     'llama-3.1-sonar-large-128k-online',
+    perplexity:     'sonar',
     together:       'meta-llama/Llama-3.3-70B-Instruct-Turbo',
     cohere:         'command-r-plus-08-2024',
-    xai:            'grok-3-fast-beta',
+    xai:            'grok-4.6',
     'azure-openai': '(your deployment name)',
-    nvidia:         'meta/llama-3.3-70b-instruct',
+    nvidia:         'nvidia/nemotron-3-super-120b-a12b',
     cerebras:       'gpt-oss-120b',
     deepinfra:      'deepseek-ai/DeepSeek-V3.2',
     huggingface:    'openai/gpt-oss-120b:fastest',

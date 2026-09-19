@@ -1,4 +1,4 @@
-import { resolve, join, basename } from 'path';
+import { join, basename } from 'path';
 import { existsSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import chalk from 'chalk';
@@ -13,6 +13,7 @@ import {
 } from '../services/resume-manager.js';
 import { convertPDFToLatex } from '../services/pdf-to-latex.js';
 import { logger, spinner } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export interface ResumeCommandOpts {
   ai?: boolean;
@@ -51,7 +52,7 @@ export async function cmdResume(opts: ResumeCommandOpts): Promise<void> {
     if (!updated.resume?.path) return;
   }
 
-  await runResumeUpdate(resolve(process.cwd()), opts.ai !== false, true);
+  await runResumeUpdate(resolveProjectDirectory().root, opts.ai !== false, true);
 }
 
 // ─── PDF to LaTeX converter ───────────────────────────────────────────────────

@@ -1,11 +1,12 @@
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
-import { getAIConfig, loadConfig, type AIProviderName } from '../config/manager.js';
+import { getAIConfig, getAIModel, loadConfig, type AIProviderName } from '../config/manager.js';
 import { listProviders } from '../ai/provider.js';
 import { ensureBragRuntime } from './brag-runtime.js';
 import { delimiter, join } from 'path';
 import { homedir } from 'os';
 import { existsSync } from 'fs';
+import { buildAgentPromptLaunch } from './coding-agent.js';
 
 const run = promisify(execFile);
 
@@ -105,8 +106,18 @@ export async function installBragSkill(agent: BragAgent, pathPrefix = ''): Promi
   const env = installerEnv();
   if (pathPrefix) env.PATH = `${pathPrefix}${delimiter}${env.Path || env.PATH || ''}`;
   if (process.platform === 'win32' && pathPrefix) env.Path = env.PATH;
-  await run(command.executable, command.args,
-    { timeout: 180_000, windowsHide: true, maxBuffer: 2 * 1024 * 1024, env });
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await run(command.executable, command.args,
+        { timeout: 180_000, windowsHide: true, maxBuffer: 2 * 1024 * 1024, env });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 1_500));
+    }
+  }
+  throw lastError;
 }
 
 export interface BragLaunch {
@@ -114,6 +125,7 @@ export interface BragLaunch {
   executable: string;
   args: string[];
   env: NodeJS.ProcessEnv;
+  input?: string;
 }
 
 export function buildBragLaunch(provider: AIProviderName, prompt: string, preferred: BragAgentPreference = 'automatic'): BragLaunch {
@@ -121,9 +133,13 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string, prefer
   const agent = selectBragAgent(provider, preferred);
   const env = agentEnv();
   // Native agents use their own saved OAuth session, not AutoGit API credentials.
-  if (agent === 'codex') return { agent, executable: 'codex', args: ['exec', prompt], env };
-  if (agent === 'claude-code') return { agent, executable: 'claude', args: ['-p', prompt], env };
-  if (agent === 'antigravity') return { agent, executable: 'agy', args: ['-p', prompt, '--print-timeout', '10m'], env };
+  if (agent === 'codex' || agent === 'claude-code') {
+    const launch = buildAgentPromptLaunch(agent, prompt, '10m');
+    return { agent, executable: launch.executable, args: launch.args, input: launch.input, env };
+  }
+  if (agent === 'antigravity') {
+    return { agent, executable: 'agy', args: ['-p', prompt, '--print-timeout', '10m'], env };
+  }
   const keyFields: Partial<Record<AIProviderName, [string, string | undefined]>> = {
     openai: ['OPENAI_API_KEY', ai.openaiKey],
     anthropic: ['ANTHROPIC_API_KEY', ai.anthropicKey],
@@ -150,8 +166,8 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string, prefer
 
   const defaultModel = listProviders().find(item => item.name === provider)?.defaultModel;
   const model = provider === 'custom'
-    ? ai.customModelName || ai.model || defaultModel
-    : ai.model || defaultModel;
+    ? ai.customModelName || getAIModel(provider, defaultModel)
+    : getAIModel(provider, defaultModel);
   if (!model || model.startsWith('(')) throw new Error(`Configure a model for ${provider} before using Brag.`);
   if (!/^[a-zA-Z0-9_./:@-]+$/.test(model)) throw new Error('The selected model ID contains unsupported characters.');
   let providerId: string = provider === 'gemini' ? 'google' : provider;
@@ -193,8 +209,14 @@ export async function runBragInProject(root: string): Promise<void> {
   const executable = isBatch ? (process.env.ComSpec || 'cmd.exe') : path;
   const args = isBatch ? ['/d', '/s', '/c', path, ...launch.args] : launch.args;
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(executable, args, { cwd: root, env: launch.env, stdio: 'inherit', windowsHide: true });
+    const child = spawn(executable, args, {
+      cwd: root,
+      env: launch.env,
+      stdio: launch.input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
+      windowsHide: true,
+    });
     child.once('error', reject);
     child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${launch.agent} exited with code ${code}`)));
+    if (launch.input !== undefined) child.stdin?.end(launch.input);
   });
 }

@@ -1,12 +1,12 @@
-import { resolve } from 'path';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { generateReadme, writeReadme, displayDiff } from '../services/readme-manager.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdReadme(opts: { ai?: boolean; regenerate?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
 
   logger.header('README Generator');
 

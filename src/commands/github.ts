@@ -1,4 +1,3 @@
-import { resolve } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
@@ -7,9 +6,10 @@ import { createRepo, getAuthenticatedUser, repoExists, generateTopics, isGitHubC
 import { addRemote, getGitStatus } from '../services/git-service.js';
 import { loadConfig } from '../config/manager.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdGithub(opts: { create?: boolean; private?: boolean; public?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
 
   logger.header('GitHub');
 

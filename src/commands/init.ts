@@ -1,13 +1,14 @@
-import { resolve } from 'path';
+import { join } from 'path';
 import { existsSync } from 'fs';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { getGitStatus, initGit, generateGitignore } from '../services/git-service.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdInit(): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
 
   logger.header('AutoGit Init');
 
@@ -31,7 +32,7 @@ export async function cmdInit(): Promise<void> {
   }
 
   // Generate .gitignore
-  if (!existsSync(resolve(rootDir, '.gitignore'))) {
+  if (!existsSync(join(rootDir, '.gitignore'))) {
     await generateGitignore(rootDir, analysis);
   } else {
     logger.info('.gitignore already exists');

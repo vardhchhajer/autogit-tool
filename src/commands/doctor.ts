@@ -4,6 +4,8 @@ import { execSync } from 'child_process';
 import { getConfigPath } from '../utils/platform.js';
 import { getGitHubToken, getAIConfig } from '../config/manager.js';
 import { logger } from '../utils/logger.js';
+import { getProvider, isOAuthAgentProvider } from '../ai/provider.js';
+import { resolveAgentExecutable, type CodingAgent } from '../services/coding-agent.js';
 
 interface Check {
   name: string;
@@ -42,14 +44,25 @@ export async function cmdDoctor(): Promise<void> {
     message: ghToken ? 'Configured' : 'Not set (run "autogit login" or set GITHUB_TOKEN)',
   });
 
-  // Check AI provider
+  // Check the selected AI provider rather than a hard-coded subset of keys.
   const aiConfig = getAIConfig();
-  const hasAnyAI = !!(aiConfig.openaiKey || aiConfig.anthropicKey || aiConfig.geminiKey || aiConfig.openrouterKey);
-  checks.push({
-    name: 'AI provider',
-    status: hasAnyAI ? 'pass' : 'warn',
-    message: hasAnyAI ? `Configured: ${aiConfig.provider}` : 'Not configured (set API key for AI features)',
-  });
+  try {
+    getProvider(aiConfig.provider);
+    if (isOAuthAgentProvider(aiConfig.provider)) {
+      const executable = await resolveAgentExecutable(aiConfig.provider as CodingAgent);
+      checks.push({
+        name: 'AI provider',
+        status: executable ? 'pass' : 'fail',
+        message: executable
+          ? `${aiConfig.provider} installed (subscription sign-in is verified on generation)`
+          : `${aiConfig.provider} is selected but its CLI is not installed (run "autogit setup")`,
+      });
+    } else {
+      checks.push({ name: 'AI provider', status: 'pass', message: `Configured: ${aiConfig.provider}` });
+    }
+  } catch (error: any) {
+    checks.push({ name: 'AI provider', status: 'fail', message: error.message });
+  }
 
   // Display results
   for (const check of checks) {

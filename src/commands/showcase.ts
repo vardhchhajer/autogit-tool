@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { collectShowcaseFacts, generateShowcase } from '../services/showcase.js';
@@ -8,9 +8,10 @@ import { getGitStatus } from '../services/git-service.js';
 import { remoteWebUrl } from '../services/publish-workflow.js';
 import { getConfigDir } from '../utils/platform.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdShowcase(opts: { ai?: boolean }): Promise<void> {
-  const root = resolve(process.cwd());
+  const root = resolveProjectDirectory().root;
   logger.header('Project Showcase');
   const scan = scanProject(root);
   const analysis = await analyzeProject(root, scan);

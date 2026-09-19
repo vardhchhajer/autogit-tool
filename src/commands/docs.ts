@@ -1,11 +1,11 @@
-import { resolve } from 'path';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { generateDocs, writeDocs } from '../services/docs-generator.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdDocs(opts: { ai?: boolean; regenerate?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
 
   logger.header('Generate Documentation');
 

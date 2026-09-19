@@ -1,13 +1,13 @@
-import { resolve } from 'path';
 import chalk from 'chalk';
 import Table from 'cli-table3';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { generateInsights } from '../services/insights.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdAnalyze(opts: { ai?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
 
   logger.header('Project Analysis');
 

@@ -66,6 +66,7 @@ export interface AutoGitConfig {
   ai?: {
     provider?: AIProviderName;
     model?: string;
+    models?: Partial<Record<AIProviderName, string>>;
     imageModel?: string;
     // Original 5
     openaiKey?: string;
@@ -224,6 +225,7 @@ export function getAIConfig() {
     // Active provider + model
     provider: (process.env.AUTOGIT_AI_PROVIDER || ai.provider || 'openai') as AIProviderName,
     model: process.env.AUTOGIT_AI_MODEL || ai.model,
+    models: ai.models || {},
     imageModel: process.env.AUTOGIT_IMAGE_MODEL || ai.imageModel,
 
     // Original providers
@@ -260,4 +262,12 @@ export function getAIConfig() {
     customEndpoint:  process.env.CUSTOM_API_ENDPOINT || ai.customEndpoint,
     customModelName: process.env.CUSTOM_MODEL_NAME   || ai.customModelName,
   };
+}
+
+export function getAIModel(provider: AIProviderName, fallback?: string): string | undefined {
+  const config = loadConfig();
+  const ai = config.ai ?? {};
+  const activeProvider = (process.env.AUTOGIT_AI_PROVIDER || ai.provider || 'openai') as AIProviderName;
+  if (process.env.AUTOGIT_AI_MODEL) return process.env.AUTOGIT_AI_MODEL;
+  return ai.models?.[provider] || (provider === activeProvider ? ai.model : undefined) || fallback;
 }

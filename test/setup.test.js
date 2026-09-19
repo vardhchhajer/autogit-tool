@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { shouldRunFirstSetup } from '../dist/commands/setup.js';
 import { agentPackageName, bragSkillInstallCommand, buildBragLaunch, selectBragAgent } from '../dist/services/brag-agent.js';
 import { isOAuthAgentProvider, listProviders } from '../dist/ai/provider.js';
+import { buildAgentPromptLaunch } from '../dist/services/coding-agent.js';
 
 test('noninteractive runs never start the setup wizard', () => {
   assert.equal(shouldRunFirstSetup(false), false);
@@ -84,7 +85,17 @@ test('Antigravity uses its own OAuth session in headless prompt mode', () => {
   assert.equal(launch.agent, 'antigravity');
   assert.equal(launch.executable, 'agy');
   assert.deepEqual(launch.args.slice(0, 2), ['-p', 'Make a video']);
+  assert.equal(launch.input, undefined);
   assert.equal(launch.env.GEMINI_API_KEY, undefined);
+});
+
+test('OAuth text-generation prompts avoid Windows command arguments', () => {
+  const prompt = 'x'.repeat(50_000);
+  for (const agent of ['codex', 'claude-code', 'antigravity']) {
+    const launch = buildAgentPromptLaunch(agent, prompt);
+    assert.equal(launch.args.includes(prompt), false);
+    assert.ok(launch.input.length >= 50_000);
+  }
 });
 
 test('local Ollama maps to OpenCode without an API key', () => {

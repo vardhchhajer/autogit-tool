@@ -506,6 +506,8 @@ function detectArchitecture(scan: ScanResult, analysis: ProjectAnalysis): void {
     analysis.architecture = 'MVC';
   } else if (dirs.some(d => d.includes('domain')) && dirs.some(d => d.includes('application'))) {
     analysis.architecture = 'Clean Architecture';
+  } else if (dirs.some(d => /(?:^|\/)src\/commands$/.test(d)) && dirs.some(d => /(?:^|\/)src\/services$/.test(d))) {
+    analysis.architecture = 'Modular CLI';
   } else if (analysis.frameworks.length > 0) {
     analysis.architecture = 'Framework-based';
   } else {
@@ -552,6 +554,8 @@ async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: Pro
   const sourceExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.cs', '.java', '.kt'];
   const sourceFiles = scan.files
     .filter(f => sourceExts.includes(f.extension))
+    .filter(f => !/(?:^|\/)(?:test|tests|__tests__|fixtures)(?:\/|$)/i.test(f.relativePath))
+    .filter(f => !/\.(?:test|spec)\.[^.]+$/i.test(f.name))
     .slice(0, 60);
 
   // Count pages and components
@@ -565,7 +569,7 @@ async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: Pro
   const featurePatterns: Array<{ pattern: RegExp; feature: string }> = [
     { pattern: /\b(?:auth|login|signin|signup)\b|jwt\.sign|passport\.use|oauth/i,            feature: 'Authentication' },
     { pattern: /file_uploader|st\.file_uploader|multer|formdata|FileUpload|file.*upload/i,    feature: 'File Upload' },
-    { pattern: /stripe|payment|checkout|billing/i,                                             feature: 'Payment Integration' },
+    { pattern: /stripe|payment.*checkout|checkout.*payment|billing/i,                           feature: 'Payment Integration' },
     { pattern: /socket\.io|new WebSocket|websocket\.connect|\.on\(['"]message/i,               feature: 'Real-time (WebSocket)' },
     { pattern: /nodemailer|sendgrid|mailgun|smtplib|smtp\.send/i,                              feature: 'Email Notifications' },
     { pattern: /push_notification|fcm|apns|firebase.*message/i,                                feature: 'Push Notifications' },
@@ -578,7 +582,6 @@ async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: Pro
     { pattern: /openai\.|anthropic\.|gemini\.|langchain|LLM\(|ChatOpenAI/i,                    feature: 'AI Integration' },
     { pattern: /barcode|qrcode|cv2\.QRCode|scanner\.decode/i,                                  feature: 'Barcode/QR Scanner' },
     { pattern: /st\.metric|st\.dataframe|plotly.*dashboard|analytics.*dashboard/i,             feature: 'Analytics Dashboard' },
-    { pattern: /\.create\(|\.update\(|\.delete\(|\.findOne\(|session\.add|session\.delete/i,   feature: 'CRUD Operations' },
     { pattern: /to_csv|\.to_excel|csv\.writer|st\.download_button/i,                           feature: 'Data Export' },
     { pattern: /pd\.read_excel|pd\.read_csv|openpyxl\.load|xlrd\.open/i,                       feature: 'Data Import' },
     { pattern: /\brole\b.*permission|rbac|acl\.|@roles_required/i,                             feature: 'Role-based Access Control' },
@@ -586,9 +589,7 @@ async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: Pro
     { pattern: /twilio\.|vonage\.|nexmo\.|sms\.send/i,                                         feature: 'SMS Integration' },
     { pattern: /whisper\.|SpeechRecognition|pyttsx|text.to.speech/i,                           feature: 'Speech Processing' },
     { pattern: /solana|ethereum|web3\.eth|@solana\/web3/i,                                     feature: 'Blockchain' },
-    { pattern: /FROM python:|FROM node:|docker-compose|DockerFile/i,                           feature: 'Containerization' },
     { pattern: /tspl|ZPL\.|TSC.*TTP|pywin32.*print/i,                                         feature: 'Label Printing' },
-    { pattern: /json\.dump|json\.load|save_report|load_report/i,                               feature: 'Report Persistence' },
     { pattern: /st\.tabs?\s*\(\[/i,                                                             feature: 'Multi-tab Interface' },
     { pattern: /st\.sidebar/i,                                                                  feature: 'Sidebar Navigation' },
     { pattern: /st\.data_editor|st\.dataframe/i,                                               feature: 'Interactive Data Tables' },
@@ -616,9 +617,12 @@ async function deepCodeAnalysis(rootDir: string, scan: ScanResult, analysis: Pro
       content = _readFileSync(file.path, 'latin1');
     } catch { continue; }
 
-    // Feature detection (full file)
-    for (const { pattern, feature } of featurePatterns) {
-      if (pattern.test(content)) foundFeatures.add(feature);
+    // Do not let this analyzer's own detection rules become project features.
+    const isAnalysisSupportFile = /(?:^|\/)(?:scanner\/project-analyzer|ai\/prompts)\.[cm]?[jt]s$/i.test(file.relativePath);
+    if (!isAnalysisSupportFile) {
+      for (const { pattern, feature } of featurePatterns) {
+        if (pattern.test(content)) foundFeatures.add(feature);
+      }
     }
 
     // Route extraction

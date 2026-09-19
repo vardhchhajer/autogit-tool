@@ -1,13 +1,13 @@
-import { resolve } from 'path';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { getGitStatus } from '../services/git-service.js';
 import { runCommitWorkflow } from '../services/commit-workflow.js';
 import { runPublishWorkflow } from '../services/publish-workflow.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdPublish(opts: { yes?: boolean; private?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
   logger.header('Publish to GitHub');
   const status = await getGitStatus(rootDir);
   if (!status.isRepo) throw new Error('Not a Git repository. Run "autogit init" first.');

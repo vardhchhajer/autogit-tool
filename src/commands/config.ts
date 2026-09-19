@@ -36,6 +36,7 @@ const NON_SECRET_KEYS = new Set<keyof NonNullable<AutoGitConfig['ai']>>([
   'customModelName',
   'provider',
   'model',
+  'models',
 ]);
 
 const PROVIDER_FIELDS: Record<
@@ -144,6 +145,11 @@ async function interactiveConfig(): Promise<void> {
 export async function configureAI(): Promise<void> {
   const config = loadConfig();
   config.ai = config.ai ?? {};
+  const previousProvider = config.ai.provider;
+  if (config.ai.model && previousProvider) {
+    config.ai.models = { ...config.ai.models, [previousProvider]: config.ai.model };
+    delete config.ai.model;
+  }
 
   const providers = listProviders();
   const choices = providers.map(p => {
@@ -205,20 +211,19 @@ export async function configureAI(): Promise<void> {
     }
   }
 
-  // Optional model override
-  logger.blank();
-  const { customModel } = await inquirer.prompt<{ customModel: string }>([{
-    type: 'input',
-    name: 'customModel',
-    message: `Override model ${chalk.dim('(leave blank to use provider default)')}:`,
-    default: config.ai.model ?? '',
-  }]);
+  if (!isOAuthAgentProvider(provider)) {
+    logger.blank();
+    const { customModel } = await inquirer.prompt<{ customModel: string }>([{
+      type: 'input',
+      name: 'customModel',
+      message: `Override model ${chalk.dim('(leave blank to use provider default)')}:`,
+      default: config.ai.models?.[provider] ?? '',
+    }]);
 
-  const trimmedModel = customModel.trim();
-  if (trimmedModel) {
-    config.ai.model = trimmedModel;
-  } else {
-    delete config.ai.model;
+    const trimmedModel = customModel.trim();
+    config.ai.models = config.ai.models ?? {};
+    if (trimmedModel) config.ai.models[provider] = trimmedModel;
+    else delete config.ai.models[provider];
   }
 
   saveConfig(config);
@@ -333,7 +338,7 @@ async function testCurrentProvider(): Promise<void> {
   const ai = config.ai ?? {};
   const providerName = ai.provider || 'openai';
 
-  logger.info(`Testing provider: ${chalk.bold(providerName)}, model: ${chalk.bold(ai.model || '(default)')}`);
+  logger.info(`Testing provider: ${chalk.bold(providerName)}, model: ${chalk.bold(ai.models?.[providerName] || ai.model || '(default)')}`);
   logger.blank();
 
   const spin = spinner('Sending test request...').start();
@@ -402,7 +407,8 @@ function debugConfig(): void {
   logger.blank();
 
   logger.info(`Active provider: ${chalk.bold(ai.provider || '(not set, defaults to openai)')}`);
-  logger.info(`Model override:  ${ai.model || '(using provider default)'}`);
+  const providerModel = ai.provider ? ai.models?.[ai.provider] : undefined;
+  logger.info(`Model override:  ${providerModel || ai.model || '(using provider default)'}`);
   logger.blank();
 
   // Show ENV VARS that are set — these override the config file

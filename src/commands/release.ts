@@ -1,13 +1,13 @@
-import { resolve } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { getAuthenticatedUser, createRelease, repoExists, isGitHubConfigured } from '../services/github-service.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdRelease(opts: { tag?: string; draft?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const rootDir = resolveProjectDirectory().root;
 
   logger.header('Create Release');
 

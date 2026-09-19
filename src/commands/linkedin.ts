@@ -1,4 +1,4 @@
-import { join, resolve } from 'path';
+import { join } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
@@ -11,11 +11,14 @@ import { getConfigDir } from '../utils/platform.js';
 import { getGitStatus } from '../services/git-service.js';
 import { remoteWebUrl } from '../services/publish-workflow.js';
 import { logger } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; promoImage?: boolean | string; showcaseCards?: boolean }): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const projectDirectory = resolveProjectDirectory();
+  const rootDir = projectDirectory.root;
 
   logger.header('Social Media Content');
+  if (projectDirectory.discovered) logger.info(`Using project folder: ${rootDir}`);
 
   const scan = scanProject(rootDir);
   const analysis = await analyzeProject(rootDir, scan);
@@ -71,7 +74,7 @@ export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; 
       type: 'list', name: 'imageChoice', message: 'Create an image for this post?',
       choices: [
         { name: 'No image', value: 'none' },
-        { name: 'Real app screenshot', value: 'screenshot' },
+        { name: 'Real web-app screenshot (requires a running URL)', value: 'screenshot' },
         { name: 'Conceptual promotional artwork', value: 'artwork' },
         { name: 'Project evidence cards (works for CLI/API/library too)', value: 'cards' },
         { name: 'Both', value: 'both' },
@@ -79,10 +82,10 @@ export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; 
     }]);
     if (answer.imageChoice === 'screenshot' || answer.imageChoice === 'both') {
       const urlAnswer = await inquirer.prompt<{ url: string }>([{
-        type: 'input', name: 'url', message: 'Running app URL:',
-        validate: value => /^https?:\/\//i.test(value) || 'Enter an http:// or https:// URL',
+        type: 'input', name: 'url', message: 'Running app URL (leave blank to skip):',
+        validate: value => !value.trim() || /^https?:\/\//i.test(value) || 'Enter an http:// or https:// URL, or leave blank',
       }]);
-      screenshotUrl = urlAnswer.url;
+      screenshotUrl = urlAnswer.url.trim() || undefined;
     }
     if (answer.imageChoice === 'artwork' || answer.imageChoice === 'both') promoImage = true;
     if (answer.imageChoice === 'cards') showcaseCards = true;

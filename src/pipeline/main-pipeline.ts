@@ -1,4 +1,3 @@
-import { resolve } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
@@ -16,6 +15,7 @@ import { runBragInProject, selectBragAgent } from '../services/brag-agent.js';
 import { captureProjectScreenshot, generatePromotionalArtwork } from '../services/social-images.js';
 import { join } from 'path';
 import { logger, spinner } from '../utils/logger.js';
+import { resolveProjectDirectory } from '../utils/project-root.js';
 
 export interface PipelineOptions {
   yes?: boolean;
@@ -34,9 +34,11 @@ export interface PipelineOptions {
 }
 
 export async function runMainPipeline(options: PipelineOptions): Promise<void> {
-  const rootDir = resolve(process.cwd());
+  const projectDirectory = resolveProjectDirectory();
+  const rootDir = projectDirectory.root;
 
   logger.header('AutoGit');
+  if (projectDirectory.discovered) logger.info(`Using project folder: ${rootDir}`);
   logger.dimmed(`Analyzing: ${rootDir}`);
   logger.blank();
 
@@ -292,17 +294,17 @@ async function handleSocialContent(
       type: 'list', name: 'media', message: 'Add a real screenshot or promotional artwork?',
       choices: [
         { name: 'No additional media', value: 'none' },
-        { name: 'Real app screenshot', value: 'screenshot' },
+        { name: 'Real web-app screenshot (requires a running URL)', value: 'screenshot' },
         { name: 'Conceptual artwork', value: 'artwork' },
         { name: 'Both', value: 'both' },
       ], default: 'none',
     }]);
     if (answer.media === 'screenshot' || answer.media === 'both') {
       const urlAnswer = await inquirer.prompt<{ url: string }>([{
-        type: 'input', name: 'url', message: 'Running app URL:',
-        validate: value => /^https?:\/\//i.test(value) || 'Enter an http:// or https:// URL',
+        type: 'input', name: 'url', message: 'Running app URL (leave blank to skip):',
+        validate: value => !value.trim() || /^https?:\/\//i.test(value) || 'Enter an http:// or https:// URL, or leave blank',
       }]);
-      screenshotUrl = urlAnswer.url;
+      screenshotUrl = urlAnswer.url.trim() || undefined;
     }
     promoImage = answer.media === 'artwork' || answer.media === 'both';
   }
