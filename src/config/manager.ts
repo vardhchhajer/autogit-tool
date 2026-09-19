@@ -54,6 +54,15 @@ export type AIProviderName =
   | 'antigravity'
   | 'custom';
 
+export type ImageProviderName = 'none' | 'openai' | 'gemini' | 'xai' | 'together' | 'custom';
+
+export const IMAGE_PROVIDER_DEFAULT_MODELS: Record<Exclude<ImageProviderName, 'none' | 'custom'>, string> = {
+  openai: 'gpt-image-1.5',
+  gemini: 'gemini-3.1-flash-image',
+  xai: 'grok-imagine-image-2.0',
+  together: 'black-forest-labs/FLUX.2-dev',
+};
+
 export interface AutoGitConfig {
   setup?: {
     completed?: boolean;
@@ -67,7 +76,10 @@ export interface AutoGitConfig {
     provider?: AIProviderName;
     model?: string;
     models?: Partial<Record<AIProviderName, string>>;
+    imageProvider?: ImageProviderName;
     imageModel?: string;
+    imageKey?: string;
+    imageEndpoint?: string;
     // Original 5
     openaiKey?: string;
     anthropicKey?: string;
@@ -184,6 +196,8 @@ function writeDotEnv(config: AutoGitConfig): void {
     ['CUSTOM_API_KEY',        ai.customKey],
     ['CUSTOM_API_ENDPOINT',   ai.customEndpoint],
     ['CUSTOM_MODEL_NAME',     ai.customModelName],
+    ['AUTOGIT_IMAGE_API_KEY', ai.imageKey],
+    ['AUTOGIT_IMAGE_ENDPOINT', ai.imageEndpoint],
     ['GITHUB_TOKEN',          config.github?.token],
   ];
 
@@ -261,6 +275,30 @@ export function getAIConfig() {
     customKey:       process.env.CUSTOM_API_KEY      || ai.customKey,
     customEndpoint:  process.env.CUSTOM_API_ENDPOINT || ai.customEndpoint,
     customModelName: process.env.CUSTOM_MODEL_NAME   || ai.customModelName,
+  };
+}
+
+export function getImageConfig() {
+  const ai = loadConfig().ai ?? {};
+  const textProvider = (process.env.AUTOGIT_AI_PROVIDER || ai.provider || 'openai') as AIProviderName;
+  const reusableProvider = ['openai', 'gemini', 'xai', 'together'].includes(textProvider)
+    ? textProvider as Exclude<ImageProviderName, 'none' | 'custom'>
+    : 'none';
+  const configuredProvider = ai.imageProvider || reusableProvider;
+  const provider = (process.env.AUTOGIT_IMAGE_PROVIDER || configuredProvider) as ImageProviderName;
+  const providerKeys: Partial<Record<ImageProviderName, string | undefined>> = {
+    openai: process.env.OPENAI_API_KEY || ai.openaiKey,
+    gemini: process.env.GEMINI_API_KEY || ai.geminiKey,
+    xai: process.env.XAI_API_KEY || ai.xaiKey,
+    together: process.env.TOGETHER_API_KEY || ai.togetherKey,
+    custom: process.env.AUTOGIT_IMAGE_API_KEY || ai.imageKey,
+  };
+  return {
+    provider,
+    model: process.env.AUTOGIT_IMAGE_MODEL || (provider === configuredProvider ? ai.imageModel : undefined) ||
+      (provider !== 'none' && provider !== 'custom' ? IMAGE_PROVIDER_DEFAULT_MODELS[provider] : undefined),
+    key: providerKeys[provider],
+    endpoint: process.env.AUTOGIT_IMAGE_ENDPOINT || ai.imageEndpoint,
   };
 }
 

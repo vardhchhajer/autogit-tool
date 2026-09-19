@@ -29,7 +29,7 @@ When you run `autogit` inside a project directory it:
 
 The share package is saved under `~/.autogit/social/<project>/`. LinkedIn publishing and image upload still require your review. Destructive or public-facing Git actions require confirmation; pass `--yes` to skip prompts.
 
-The main run creates three evidence cards automatically, including for CLI, API, and library projects. A real screenshot is optional and only applies when a web app is currently reachable at an HTTP(S) URL; leave the URL blank to skip it. Conceptual artwork is also available with `autogit --promo-image` when OpenAI image generation is configured.
+The main run creates three evidence cards automatically, including for CLI, API, and library projects. A real screenshot is optional and only applies when a web app is currently reachable at an HTTP(S) URL; leave the URL blank to skip it. Conceptual artwork is available with `autogit --promo-image` when an image provider is configured.
 
 ---
 
@@ -43,7 +43,7 @@ npm install -g autogit-tool
 
 **Requirements:** Node.js 18+, Git
 
-On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, then which AI provider to use, and finally whether to include Brag (**Yes** preselected). **Codex**, **Claude Code**, and **Antigravity** appear directly in the AI-provider list and use their own browser sign-in and subscription quota for AutoGit generation. API providers, including a custom OpenAI-compatible endpoint, use their selected API key. When Brag is included, AutoGit installs a matching coding agent and its skill. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
+On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, a text AI provider, a separate image provider, and whether to include Brag (**Yes** preselected). **Codex**, **Claude Code**, and **Antigravity** use their own browser sign-in and subscription quota for text generation. Images can use OpenAI, Gemini, xAI, Together AI, or a custom OpenAI-compatible image endpoint. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
 
 The optional Brag step installs the selected agent and its skill globally. Run `autogit brag` from a project folder to start the video workflow. Codex, Claude Code, and Antigravity use their own cached OAuth sessions; AutoGit never passes them an API key. OpenCode receives only the selected provider credential for that one process and does not store it in OpenCode settings. During opted-in setup, AutoGit installs Node 22 and FFmpeg into its user-data folder if needed; Brag uses `npx hyperframes` to fetch its renderer on first use. The managed FFmpeg binary is a third-party GPL-licensed component. The image-card showcase works without those video tools. Azure OpenAI is not yet mapped to the OpenCode runner.
 
@@ -135,6 +135,20 @@ autogit config --test
 
 Choose **custom** in `autogit config` to use any service that implements the OpenAI chat-completions API. Enter its base endpoint, model name, and API key. The key is optional for local servers such as LM Studio, LocalAI, vLLM, and llama.cpp. The same endpoint, model, and key are passed to OpenCode for the optional Brag workflow; credentials are not saved in OpenCode.
 
+### Image providers
+
+Image generation is configured separately, so Codex, Claude Code, or Antigravity can remain your text provider while another API creates artwork.
+
+| Provider | Credential | Default image model |
+|---|---|---|
+| OpenAI | `OPENAI_API_KEY` | `gpt-image-1.5` |
+| Google Gemini | `GEMINI_API_KEY` | `gemini-3.1-flash-image` |
+| xAI | `XAI_API_KEY` | `grok-imagine-image-2.0` |
+| Together AI | `TOGETHER_API_KEY` | `black-forest-labs/FLUX.2-dev` |
+| Custom OpenAI-compatible | `AUTOGIT_IMAGE_API_KEY` | user supplied |
+
+Run `autogit setup` or choose **Image Provider** in `autogit config`. Environment overrides are `AUTOGIT_IMAGE_PROVIDER`, `AUTOGIT_IMAGE_MODEL`, `AUTOGIT_IMAGE_ENDPOINT`, and `AUTOGIT_IMAGE_API_KEY`.
+
 ---
 
 ## GitHub Authentication
@@ -221,7 +235,7 @@ autogit --skip-resume
 | `autogit publish` | Commit and push to GitHub |
 | `autogit github` | Create GitHub repository |
 | `autogit linkedin` | Generate all social content (short/medium/long LinkedIn, Twitter, DEV.to, resume bullet) |
-| `autogit setup` | Configure defaults, optional Brag skill, and AI provider |
+| `autogit setup` | Configure defaults, text and image providers, and optional Brag |
 | `autogit brag` | Run Brag video creation with the matched coding agent |
 | `autogit showcase` | Create a sourced project post and three LinkedIn-ready PNG cards |
 | `autogit release` | Create a GitHub release with tag and notes |
@@ -254,7 +268,7 @@ autogit linkedin --showcase-cards
 autogit linkedin --screenshot-url http://localhost:3000 --promo-image "minimal product illustration"
 ```
 
-Screenshots capture a running web app using Chrome, Edge, or Chromium installed on the computer. Promotional artwork uses the OpenAI image API when OpenAI is the selected AI provider; other providers are not switched automatically. Set an image model with `autogit config --set ai.imageModel=gpt-image-1.5` or `AUTOGIT_IMAGE_MODEL`; the default is `gpt-image-1.5`. Artwork is conceptual and should not be presented as a screenshot of the app.
+Screenshots capture a running web app using Chrome, Edge, or Chromium installed on the computer. Promotional artwork uses the separately configured OpenAI, Gemini, xAI, Together AI, or custom image provider. Artwork is conceptual and should not be presented as a screenshot of the app.
 
 ---
 

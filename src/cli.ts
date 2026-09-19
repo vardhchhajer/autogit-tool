@@ -81,7 +81,7 @@ program.hook('preAction', async (_command, action) => {
 
 program
   .command('setup')
-  .description('Choose default or custom setup, Brag, and AI provider')
+  .description('Configure text AI, image generation, defaults, and optional Brag')
   .action(async () => {
     try { await cmdSetup(); } catch (e: any) { handleError(e); }
   });

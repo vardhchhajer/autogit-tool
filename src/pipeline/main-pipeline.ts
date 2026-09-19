@@ -12,7 +12,7 @@ import { runResumeUpdate } from '../commands/resume.js';
 import { loadConfig } from '../config/manager.js';
 import { createSharePackage } from '../services/share-package.js';
 import { runBragInProject, selectBragAgent } from '../services/brag-agent.js';
-import { captureProjectScreenshot, generatePromotionalArtwork } from '../services/social-images.js';
+import { captureProjectScreenshot, generatePromotionalArtwork, isImageGenerationConfigured } from '../services/social-images.js';
 import { join } from 'path';
 import { logger, spinner } from '../utils/logger.js';
 import { resolveProjectDirectory } from '../utils/project-root.js';
@@ -289,13 +289,16 @@ async function handleSocialContent(
   let screenshotUrl = options.screenshotUrl;
   let promoImage = options.promoImage === true;
   if (!options.yes && !options.dryRun && !screenshotUrl && !promoImage && shareDirectory) {
+    const artworkAvailable = isImageGenerationConfigured();
     const answer = await inquirer.prompt<{ media: string }>([{
-      type: 'list', name: 'media', message: 'Add a real screenshot or promotional artwork?',
+      type: 'list', name: 'media', message: 'Add optional media?',
       choices: [
         { name: 'No additional media', value: 'none' },
         { name: 'Real web-app screenshot (requires a running URL)', value: 'screenshot' },
-        { name: 'Conceptual artwork', value: 'artwork' },
-        { name: 'Both', value: 'both' },
+        ...(artworkAvailable ? [
+          { name: 'Conceptual artwork', value: 'artwork' },
+          { name: 'Screenshot and artwork', value: 'both' },
+        ] : []),
       ], default: 'none',
     }]);
     if (answer.media === 'screenshot' || answer.media === 'both') {

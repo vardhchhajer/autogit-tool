@@ -2,10 +2,11 @@ import chalk from 'chalk';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { getConfigPath } from '../utils/platform.js';
-import { getGitHubToken, getAIConfig } from '../config/manager.js';
+import { getGitHubToken, getAIConfig, getImageConfig } from '../config/manager.js';
 import { logger } from '../utils/logger.js';
 import { getProvider, isOAuthAgentProvider } from '../ai/provider.js';
 import { resolveAgentExecutable, type CodingAgent } from '../services/coding-agent.js';
+import { isImageGenerationConfigured } from '../services/social-images.js';
 
 interface Check {
   name: string;
@@ -63,6 +64,16 @@ export async function cmdDoctor(): Promise<void> {
   } catch (error: any) {
     checks.push({ name: 'AI provider', status: 'fail', message: error.message });
   }
+
+  const imageConfig = getImageConfig();
+  const imageConfigured = isImageGenerationConfigured();
+  checks.push({
+    name: 'Image provider',
+    status: imageConfigured ? 'pass' : 'warn',
+    message: imageConfigured
+      ? `Configured: ${imageConfig.provider} (${imageConfig.model})`
+      : 'Not configured (optional; evidence cards still work)',
+  });
 
   // Display results
   for (const check of checks) {

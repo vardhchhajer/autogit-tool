@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { loadConfig, saveConfig, type AutoGitConfig, type AIProviderName } from '../config/manager.js';
+import { IMAGE_PROVIDER_DEFAULT_MODELS, loadConfig, saveConfig, type AutoGitConfig, type AIProviderName, type ImageProviderName } from '../config/manager.js';
 import { getConfigPath } from '../utils/platform.js';
 import { listProviders, getProvider, isOAuthAgentProvider } from '../ai/provider.js';
 import { logger, spinner } from '../utils/logger.js';
@@ -24,6 +24,7 @@ const SECRET_PATHS = [
   'ai.deepinfraKey',
   'ai.huggingfaceKey',
   'ai.fireworksKey',
+  'ai.imageKey',
 ];
 
 // Non-secret fields (shown as plain text, never masked)
@@ -34,6 +35,9 @@ const NON_SECRET_KEYS = new Set<keyof NonNullable<AutoGitConfig['ai']>>([
   'azureOpenAIApiVersion',
   'customEndpoint',
   'customModelName',
+  'imageProvider',
+  'imageModel',
+  'imageEndpoint',
   'provider',
   'model',
   'models',
@@ -130,6 +134,7 @@ async function interactiveConfig(): Promise<void> {
     message: 'What would you like to configure?',
     choices: [
       { name: 'AI Provider & Keys', value: 'ai' },
+      { name: 'Image Provider',     value: 'image' },
       { name: 'GitHub Token',       value: 'github' },
       { name: 'Defaults',           value: 'defaults' },
       { name: 'View current config',value: 'view' },
@@ -138,6 +143,7 @@ async function interactiveConfig(): Promise<void> {
 
   if (section === 'view')     { displayConfig(); return; }
   if (section === 'ai')       { await configureAI(); return; }
+  if (section === 'image')    { await configureImageProvider(); return; }
   if (section === 'github')   { await configureGitHub(); return; }
   if (section === 'defaults') { await configureDefaults(); return; }
 }
@@ -237,6 +243,69 @@ export async function configureAI(): Promise<void> {
 
   // ── Verify the key immediately ───────────────────────────────────────────
   await testCurrentProvider();
+}
+
+export async function configureImageProvider(): Promise<void> {
+  const config = loadConfig();
+  config.ai = config.ai ?? {};
+  const supportedTextProvider = ['openai', 'gemini', 'xai', 'together'].includes(config.ai.provider || '')
+    ? config.ai.provider as ImageProviderName
+    : 'none';
+  const previousProvider = config.ai.imageProvider || supportedTextProvider;
+  const keyFields: Partial<Record<ImageProviderName, keyof NonNullable<AutoGitConfig['ai']>>> = {
+    openai: 'openaiKey', gemini: 'geminiKey', xai: 'xaiKey', together: 'togetherKey', custom: 'imageKey',
+  };
+  const labels: Record<ImageProviderName, string> = {
+    none: 'None (use generated evidence cards only)',
+    openai: 'OpenAI', gemini: 'Google Gemini', xai: 'xAI', together: 'Together AI',
+    custom: 'Custom OpenAI-compatible image API',
+  };
+  const choices = (Object.keys(labels) as ImageProviderName[]).map(provider => {
+    if (provider === 'none') return { name: labels[provider], value: provider };
+    const key = keyFields[provider];
+    const configured = provider === 'custom'
+      ? !!config.ai?.imageEndpoint
+      : !!(key && config.ai?.[key]);
+    return { name: `${labels[provider]} ${configured ? chalk.green('● configured') : chalk.gray('○ not set')}`, value: provider };
+  });
+  const { provider } = await inquirer.prompt<{ provider: ImageProviderName }>([{
+    type: 'list', name: 'provider', message: 'Select image provider:', choices,
+    default: config.ai.imageProvider || supportedTextProvider,
+  }]);
+  config.ai.imageProvider = provider;
+  if (provider === 'none') {
+    saveConfig(config);
+    logger.success('Image generation disabled; evidence cards remain available.');
+    return;
+  }
+
+  const keyField = keyFields[provider]!;
+  const currentKey = config.ai[keyField] as string | undefined;
+  if (currentKey) logger.dimmed(`  current key: ***${currentKey.slice(-4)}  (press Enter to keep)`);
+  const { rawKey } = await inquirer.prompt<{ rawKey: string }>([{
+    type: 'input', name: 'rawKey', message: `${labels[provider]} image API key:`,
+  }]);
+  const key = sanitizeKey(rawKey);
+  if (key) (config.ai as any)[keyField] = key;
+
+  if (provider === 'custom') {
+    const { endpoint } = await inquirer.prompt<{ endpoint: string }>([{
+      type: 'input', name: 'endpoint', message: 'Image API base endpoint:',
+      default: config.ai.imageEndpoint || '',
+      validate: value => !!value.trim() || 'Endpoint is required',
+    }]);
+    config.ai.imageEndpoint = endpoint.trim();
+  }
+
+  const defaultModel = provider === 'custom' ? '' : IMAGE_PROVIDER_DEFAULT_MODELS[provider];
+  const { model } = await inquirer.prompt<{ model: string }>([{
+    type: 'input', name: 'model', message: 'Image model:',
+    default: provider === previousProvider ? config.ai.imageModel || defaultModel : defaultModel,
+    validate: value => !!value.trim() || 'Model is required',
+  }]);
+  config.ai.imageModel = model.trim();
+  saveConfig(config);
+  logger.success(`Image provider set to "${provider}"`);
 }
 
 async function configureGitHub(): Promise<void> {

@@ -1,6 +1,6 @@
 import inquirer from 'inquirer';
 import { getAIConfig, loadConfig, saveConfig } from '../config/manager.js';
-import { configureAI, configureDefaults } from './config.js';
+import { configureAI, configureDefaults, configureImageProvider } from './config.js';
 import { logger } from '../utils/logger.js';
 import { buildBragLaunch, ensureBragAgent, installBragSkill, selectBragAgent, type BragAgentPreference } from '../services/brag-agent.js';
 import { ensureBragRuntime } from '../services/brag-runtime.js';
@@ -28,6 +28,10 @@ export async function cmdSetup(): Promise<void> {
   logger.blank();
   logger.header('AI Provider');
   await configureAI();
+
+  logger.blank();
+  logger.header('Image Provider');
+  await configureImageProvider();
 
   const provider = loadConfig().ai?.provider || getAIConfig().provider;
   const { includeBrag } = await inquirer.prompt<{ includeBrag: boolean }>([{

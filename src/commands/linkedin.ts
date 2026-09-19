@@ -4,7 +4,7 @@ import inquirer from 'inquirer';
 import { scanProject } from '../scanner/file-scanner.js';
 import { analyzeProject } from '../scanner/project-analyzer.js';
 import { generateSocialContent, openLinkedInShare, openTwitterShare, copyToClipboard } from '../services/social-generator.js';
-import { captureProjectScreenshot, defaultSocialImagePath, generatePromotionalArtwork } from '../services/social-images.js';
+import { captureProjectScreenshot, defaultSocialImagePath, generatePromotionalArtwork, isImageGenerationConfigured } from '../services/social-images.js';
 import { collectShowcaseFacts } from '../services/showcase.js';
 import { saveShowcaseCards } from '../services/showcase-cards.js';
 import { getConfigDir } from '../utils/platform.js';
@@ -68,14 +68,17 @@ export async function cmdLinkedin(opts: { screenshotUrl?: string; promoImage?: b
   let promoImage = opts.promoImage;
   let showcaseCards = opts.showcaseCards;
   if (!screenshotUrl && !promoImage && !showcaseCards) {
+    const artworkAvailable = isImageGenerationConfigured();
     const answer = await inquirer.prompt<{ imageChoice: string }>([{
       type: 'list', name: 'imageChoice', message: 'Create an image for this post?',
       choices: [
         { name: 'No image', value: 'none' },
         { name: 'Real web-app screenshot (requires a running URL)', value: 'screenshot' },
-        { name: 'Conceptual promotional artwork', value: 'artwork' },
         { name: 'Project evidence cards (works for CLI/API/library too)', value: 'cards' },
-        { name: 'Both', value: 'both' },
+        ...(artworkAvailable ? [
+          { name: 'Conceptual promotional artwork', value: 'artwork' },
+          { name: 'Screenshot and artwork', value: 'both' },
+        ] : []),
       ], default: 'none',
     }]);
     if (answer.imageChoice === 'screenshot' || answer.imageChoice === 'both') {
