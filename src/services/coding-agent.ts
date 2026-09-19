@@ -21,12 +21,15 @@ export interface AgentPromptLaunch {
   output: 'text' | 'antigravity-stream';
 }
 
-export function buildAgentPromptLaunch(agent: CodingAgent, prompt: string, timeout = '5m'): AgentPromptLaunch {
+export function buildAgentPromptLaunch(agent: CodingAgent, prompt: string, timeout = '5m', acceptEdits = false): AgentPromptLaunch {
   if (agent === 'codex') return { executable: 'codex', args: ['exec', '-'], input: prompt, output: 'text' };
   if (agent === 'claude-code') return { executable: 'claude', args: ['-p'], input: prompt, output: 'text' };
   return {
     executable: 'agy',
-    args: ['--input-format', 'stream-json', '--output-format', 'stream-json', '--print-timeout', timeout],
+    args: [
+      '--input-format', 'stream-json', '--output-format', 'stream-json', '--print-timeout', timeout,
+      ...(acceptEdits ? ['--mode=accept-edits'] : []),
+    ],
     input: `${JSON.stringify({ event: 'user', message: { content: prompt } })}\n`,
     output: 'antigravity-stream',
   };
@@ -65,7 +68,7 @@ export async function resolveAgentExecutable(agent: CodingAgent, pathPrefix = ''
 export async function runAgentPrompt(
   agent: CodingAgent,
   prompt: string,
-  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number; maxBuffer?: number },
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number; maxBuffer?: number; acceptEdits?: boolean },
 ): Promise<string> {
   const executablePath = await resolveAgentExecutable(agent);
   if (!executablePath) {
@@ -74,7 +77,7 @@ export async function runAgentPrompt(
     throw error;
   }
 
-  const launch = buildAgentPromptLaunch(agent, prompt);
+  const launch = buildAgentPromptLaunch(agent, prompt, '5m', options.acceptEdits);
   const isBatch = process.platform === 'win32' && /\.(cmd|bat)$/i.test(executablePath);
   const executable = isBatch ? (process.env.ComSpec || 'cmd.exe') : executablePath;
   const args = isBatch ? ['/d', '/s', '/c', executablePath, ...launch.args] : launch.args;

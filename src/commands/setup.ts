@@ -33,7 +33,9 @@ export async function cmdSetup(): Promise<void> {
   logger.header('Image Provider');
   await configureImageProvider();
 
-  const provider = loadConfig().ai?.provider || getAIConfig().provider;
+  const configuredAI = loadConfig().ai;
+  const provider = configuredAI?.provider || getAIConfig().provider;
+  const imageProvider = configuredAI?.imageProvider;
   const { includeBrag } = await inquirer.prompt<{ includeBrag: boolean }>([{
     type: 'confirm', name: 'includeBrag',
     message: 'Install Brag for this provider?',
@@ -57,6 +59,16 @@ export async function cmdSetup(): Promise<void> {
 
   let brag: 'installed' | 'skipped' | 'failed' = 'skipped';
   let agent: ReturnType<typeof selectBragAgent> | undefined;
+  if (imageProvider === 'antigravity' && provider !== 'antigravity') {
+    logger.info('Setting up Antigravity image generation...');
+    try {
+      await ensureBragAgent('antigravity');
+      logger.success('Antigravity is installed. Sign in with Google on first use.');
+    } catch (error: any) {
+      logger.warn(`Antigravity image setup failed: ${error.message}`);
+      logger.dimmed('Run autogit setup to retry later.');
+    }
+  }
   if (includeBrag || ['codex', 'claude-code', 'antigravity'].includes(provider)) {
     agent = selectBragAgent(provider, preferredAgent);
     logger.info(`Setting up ${agent}${includeBrag ? ' and Brag' : ''}...`);

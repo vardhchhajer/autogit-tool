@@ -66,12 +66,19 @@ export async function cmdDoctor(): Promise<void> {
   }
 
   const imageConfig = getImageConfig();
-  const imageConfigured = isImageGenerationConfigured();
+  const imageExecutable = imageConfig.provider === 'antigravity'
+    ? await resolveAgentExecutable('antigravity')
+    : undefined;
+  const imageConfigured = imageConfig.provider === 'antigravity'
+    ? !!imageExecutable
+    : isImageGenerationConfigured();
   checks.push({
     name: 'Image provider',
-    status: imageConfigured ? 'pass' : 'warn',
+    status: imageConfigured ? 'pass' : imageConfig.provider === 'antigravity' ? 'fail' : 'warn',
     message: imageConfigured
       ? `Configured: ${imageConfig.provider} (${imageConfig.model})`
+      : imageConfig.provider === 'antigravity'
+        ? 'Antigravity is selected but its CLI is not installed (run "autogit setup")'
       : 'Not configured (optional; evidence cards still work)',
   });
 

@@ -248,7 +248,7 @@ export async function configureAI(): Promise<void> {
 export async function configureImageProvider(): Promise<void> {
   const config = loadConfig();
   config.ai = config.ai ?? {};
-  const supportedTextProvider = ['openai', 'gemini', 'xai', 'together'].includes(config.ai.provider || '')
+  const supportedTextProvider = ['antigravity', 'openai', 'gemini', 'xai', 'together'].includes(config.ai.provider || '')
     ? config.ai.provider as ImageProviderName
     : 'none';
   const previousProvider = config.ai.imageProvider || supportedTextProvider;
@@ -257,15 +257,16 @@ export async function configureImageProvider(): Promise<void> {
   };
   const labels: Record<ImageProviderName, string> = {
     none: 'None (use generated evidence cards only)',
+    antigravity: 'Antigravity (Google sign-in, free quota)',
     openai: 'OpenAI', gemini: 'Google Gemini', xai: 'xAI', together: 'Together AI',
     custom: 'Custom OpenAI-compatible image API',
   };
   const choices = (Object.keys(labels) as ImageProviderName[]).map(provider => {
     if (provider === 'none') return { name: labels[provider], value: provider };
     const key = keyFields[provider];
-    const configured = provider === 'custom'
+    const configured = provider === 'antigravity' || (provider === 'custom'
       ? !!config.ai?.imageEndpoint
-      : !!(key && config.ai?.[key]);
+      : !!(key && config.ai?.[key]));
     return { name: `${labels[provider]} ${configured ? chalk.green('● configured') : chalk.gray('○ not set')}`, value: provider };
   });
   const { provider } = await inquirer.prompt<{ provider: ImageProviderName }>([{
@@ -276,6 +277,12 @@ export async function configureImageProvider(): Promise<void> {
   if (provider === 'none') {
     saveConfig(config);
     logger.success('Image generation disabled; evidence cards remain available.');
+    return;
+  }
+  if (provider === 'antigravity') {
+    delete config.ai.imageModel;
+    saveConfig(config);
+    logger.success('Image provider set to "antigravity". AutoGit setup will install it; sign in with Google on first use.');
     return;
   }
 

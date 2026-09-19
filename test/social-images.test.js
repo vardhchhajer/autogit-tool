@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { captureProjectScreenshot, generatePromotionalArtwork } from '../dist/services/social-images.js';
@@ -35,15 +35,19 @@ test('artwork uses the selected OpenAI provider without a live API call', async 
   const root = mkdtempSync(join(tmpdir(), 'autogit-art-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const originalProvider = process.env.AUTOGIT_AI_PROVIDER;
+  const originalImageProvider = process.env.AUTOGIT_IMAGE_PROVIDER;
   const originalKey = process.env.OPENAI_API_KEY;
   const originalImageModel = process.env.AUTOGIT_IMAGE_MODEL;
   const originalFetch = globalThis.fetch;
   process.env.AUTOGIT_AI_PROVIDER = 'openai';
+  process.env.AUTOGIT_IMAGE_PROVIDER = 'openai';
   process.env.OPENAI_API_KEY = 'test-key';
   process.env.AUTOGIT_IMAGE_MODEL = 'gpt-image-1.5';
   t.after(() => {
     if (originalProvider === undefined) delete process.env.AUTOGIT_AI_PROVIDER;
     else process.env.AUTOGIT_AI_PROVIDER = originalProvider;
+    if (originalImageProvider === undefined) delete process.env.AUTOGIT_IMAGE_PROVIDER;
+    else process.env.AUTOGIT_IMAGE_PROVIDER = originalImageProvider;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
     if (originalImageModel === undefined) delete process.env.AUTOGIT_IMAGE_MODEL;
@@ -91,6 +95,31 @@ test('artwork supports Gemini image generation', async t => {
   assert.equal(request.headers['x-goog-api-key'], 'gemini-test-key');
   assert.deepEqual(request.body.generationConfig.responseModalities, ['TEXT', 'IMAGE']);
   assert.equal(readFileSync(output, 'utf8'), 'gemini-image');
+});
+
+test('artwork supports Antigravity subscription image generation', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'autogit-antigravity-art-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const originalProvider = process.env.AUTOGIT_IMAGE_PROVIDER;
+  process.env.AUTOGIT_IMAGE_PROVIDER = 'antigravity';
+  t.after(() => originalProvider === undefined
+    ? delete process.env.AUTOGIT_IMAGE_PROVIDER
+    : process.env.AUTOGIT_IMAGE_PROVIDER = originalProvider);
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  let options;
+  const runner = async (agent, prompt, receivedOptions) => {
+    assert.equal(agent, 'antigravity');
+    assert.match(prompt, /built-in image generation tool/);
+    options = receivedOptions;
+    const filename = JSON.parse(prompt.match(/directly as ("[^"]+")/)[1]);
+    writeFileSync(join(receivedOptions.cwd, filename), png);
+    return 'done';
+  };
+  const output = join(root, 'art.png');
+  await generatePromotionalArtwork({ name: 'Sample', displayName: 'Sample', description: '', languages: [], frameworks: [] }, output, undefined, runner);
+  assert.equal(options.acceptEdits, true);
+  assert.equal(options.env.GEMINI_API_KEY, undefined);
+  assert.deepEqual(readFileSync(output), png);
 });
 
 test('artwork supports xAI, Together, and custom image APIs', async t => {

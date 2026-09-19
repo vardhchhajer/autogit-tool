@@ -43,7 +43,7 @@ npm install -g autogit-tool
 
 **Requirements:** Node.js 18+, Git
 
-On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, a text AI provider, a separate image provider, and whether to include Brag (**Yes** preselected). **Codex**, **Claude Code**, and **Antigravity** use their own browser sign-in and subscription quota for text generation. Images can use OpenAI, Gemini, xAI, Together AI, or a custom OpenAI-compatible image endpoint. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
+On the first interactive `autogit` run, setup asks for **Default** (preselected) or **Customize**, a text AI provider, a separate image provider, and whether to include Brag (**Yes** preselected). **Codex**, **Claude Code**, and **Antigravity** use their own browser sign-in and subscription quota for text generation. Images can use Antigravity's signed-in quota, OpenAI, Gemini, xAI, Together AI, or a custom OpenAI-compatible image endpoint. Rerun the wizard with `autogit setup`. npm does not reliably expose interactive package-install prompts, so the questions appear on first launch, not while `npm install` is running. Non-interactive runs and `--yes` skip the wizard.
 
 The optional Brag step installs the selected agent and its skill globally. Run `autogit brag` from a project folder to start the video workflow. Codex, Claude Code, and Antigravity use their own cached OAuth sessions; AutoGit never passes them an API key. OpenCode receives only the selected provider credential for that one process and does not store it in OpenCode settings. During opted-in setup, AutoGit installs Node 22 and FFmpeg into its user-data folder if needed; Brag uses `npx hyperframes` to fetch its renderer on first use. The managed FFmpeg binary is a third-party GPL-licensed component. The image-card showcase works without those video tools. Azure OpenAI is not yet mapped to the OpenCode runner.
 
@@ -137,10 +137,11 @@ Choose **custom** in `autogit config` to use any service that implements the Ope
 
 ### Image providers
 
-Image generation is configured separately, so Codex, Claude Code, or Antigravity can remain your text provider while another API creates artwork.
+Image generation is configured separately, so the text and image providers can differ. Antigravity can create artwork through its Google sign-in and included quota without an image API key.
 
 | Provider | Credential | Default image model |
 |---|---|---|
+| Antigravity | Google sign-in | Built-in image generation |
 | OpenAI | `OPENAI_API_KEY` | `gpt-image-1.5` |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-3.1-flash-image` |
 | xAI | `XAI_API_KEY` | `grok-imagine-image-2.0` |
@@ -268,7 +269,7 @@ autogit linkedin --showcase-cards
 autogit linkedin --screenshot-url http://localhost:3000 --promo-image "minimal product illustration"
 ```
 
-Screenshots capture a running web app using Chrome, Edge, or Chromium installed on the computer. Promotional artwork uses the separately configured OpenAI, Gemini, xAI, Together AI, or custom image provider. Artwork is conceptual and should not be presented as a screenshot of the app.
+Screenshots capture a running web app using Chrome, Edge, or Chromium installed on the computer. Promotional artwork uses the separately configured Antigravity, OpenAI, Gemini, xAI, Together AI, or custom image provider. Antigravity uses Google sign-in and its included quota instead of an image API key. Artwork is conceptual and should not be presented as a screenshot of the app.
 
 ---
 

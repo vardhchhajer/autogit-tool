@@ -54,9 +54,9 @@ export type AIProviderName =
   | 'antigravity'
   | 'custom';
 
-export type ImageProviderName = 'none' | 'openai' | 'gemini' | 'xai' | 'together' | 'custom';
+export type ImageProviderName = 'none' | 'antigravity' | 'openai' | 'gemini' | 'xai' | 'together' | 'custom';
 
-export const IMAGE_PROVIDER_DEFAULT_MODELS: Record<Exclude<ImageProviderName, 'none' | 'custom'>, string> = {
+export const IMAGE_PROVIDER_DEFAULT_MODELS: Record<Exclude<ImageProviderName, 'none' | 'custom' | 'antigravity'>, string> = {
   openai: 'gpt-image-1.5',
   gemini: 'gemini-3.1-flash-image',
   xai: 'grok-imagine-image-2.0',
@@ -281,7 +281,7 @@ export function getAIConfig() {
 export function getImageConfig() {
   const ai = loadConfig().ai ?? {};
   const textProvider = (process.env.AUTOGIT_AI_PROVIDER || ai.provider || 'openai') as AIProviderName;
-  const reusableProvider = ['openai', 'gemini', 'xai', 'together'].includes(textProvider)
+  const reusableProvider = ['antigravity', 'openai', 'gemini', 'xai', 'together'].includes(textProvider)
     ? textProvider as Exclude<ImageProviderName, 'none' | 'custom'>
     : 'none';
   const configuredProvider = ai.imageProvider || reusableProvider;
@@ -295,7 +295,8 @@ export function getImageConfig() {
   };
   return {
     provider,
-    model: process.env.AUTOGIT_IMAGE_MODEL || (provider === configuredProvider ? ai.imageModel : undefined) ||
+    model: provider === 'antigravity' ? 'Nano Banana' : process.env.AUTOGIT_IMAGE_MODEL ||
+      (provider === configuredProvider ? ai.imageModel : undefined) ||
       (provider !== 'none' && provider !== 'custom' ? IMAGE_PROVIDER_DEFAULT_MODELS[provider] : undefined),
     key: providerKeys[provider],
     endpoint: process.env.AUTOGIT_IMAGE_ENDPOINT || ai.imageEndpoint,
