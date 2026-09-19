@@ -1,7 +1,7 @@
 import inquirer from 'inquirer';
 import { getAIConfig, loadConfig, saveConfig } from '../config/manager.js';
 import { configureAI, configureDefaults, configureImageProvider } from './config.js';
-import { logger } from '../utils/logger.js';
+import { logger, spinner } from '../utils/logger.js';
 import { buildBragLaunch, ensureBragAgent, installBragSkill, selectBragAgent, type BragAgentPreference } from '../services/brag-agent.js';
 import { ensureBragRuntime } from '../services/brag-runtime.js';
 
@@ -60,11 +60,13 @@ export async function cmdSetup(): Promise<void> {
   let brag: 'installed' | 'skipped' | 'failed' = 'skipped';
   let agent: ReturnType<typeof selectBragAgent> | undefined;
   if (imageProvider === 'antigravity' && provider !== 'antigravity') {
-    logger.info('Setting up Antigravity image generation...');
+    const imageSpin = spinner('Setting up Antigravity image generation...').start();
     try {
       await ensureBragAgent('antigravity');
-      logger.success('Antigravity is installed. Sign in with Google on first use.');
+      imageSpin.succeed('Antigravity image generation is ready');
+      logger.dimmed('Sign in with Google on first use.');
     } catch (error: any) {
+      imageSpin.fail('Antigravity image setup failed');
       logger.warn(`Antigravity image setup failed: ${error.message}`);
       logger.dimmed('Run autogit setup to retry later.');
     }
@@ -74,10 +76,32 @@ export async function cmdSetup(): Promise<void> {
     logger.info(`Setting up ${agent}${includeBrag ? ' and Brag' : ''}...`);
     try {
       if (includeBrag) buildBragLaunch(provider, 'Verify provider configuration', agent);
-      const runtime = await ensureBragRuntime();
-      await ensureBragAgent(agent, runtime.pathPrefix);
+      const runtimeSpin = spinner('Preparing Brag runtime...').start();
+      let runtime;
+      try {
+        runtime = await ensureBragRuntime();
+        runtimeSpin.succeed('Brag runtime ready');
+      } catch (error) {
+        runtimeSpin.fail('Brag runtime setup failed');
+        throw error;
+      }
+      const agentSpin = spinner(`Checking ${agent}...`).start();
+      try {
+        await ensureBragAgent(agent, runtime.pathPrefix);
+        agentSpin.succeed(`${agent} ready`);
+      } catch (error) {
+        agentSpin.fail(`${agent} setup failed`);
+        throw error;
+      }
       if (includeBrag) {
-        await installBragSkill(agent, runtime.pathPrefix);
+        const skillSpin = spinner('Installing Brag skill...').start();
+        try {
+          await installBragSkill(agent, runtime.pathPrefix);
+          skillSpin.succeed('Brag skill installed');
+        } catch (error) {
+          skillSpin.fail('Brag skill installation failed');
+          throw error;
+        }
         brag = 'installed';
         logger.success(`Brag skill and ${agent} are installed.`);
       } else logger.success(`${agent} is installed.`);

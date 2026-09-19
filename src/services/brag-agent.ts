@@ -7,6 +7,7 @@ import { delimiter, join } from 'path';
 import { homedir } from 'os';
 import { existsSync } from 'fs';
 import { buildAgentPromptLaunch } from './coding-agent.js';
+import { logger, spinner } from '../utils/logger.js';
 
 const run = promisify(execFile);
 
@@ -199,7 +200,15 @@ export async function runBragInProject(root: string): Promise<void> {
   }
   const prompt = 'Use the installed brag skill to inspect this project and produce its launch video and share copy. Do not invent features, results, or UI that the project does not have. For a CLI, API, library, or data project, show real commands, requests, usage, or verified results instead of a fake app screenshot. Do not modify project source files.';
   const launch = buildBragLaunch(provider, prompt, agent);
-  const runtime = await ensureBragRuntime();
+  const runtimeSpin = spinner('Preparing Brag runtime...').start();
+  let runtime;
+  try {
+    runtime = await ensureBragRuntime();
+    runtimeSpin.succeed('Brag runtime ready');
+  } catch (error) {
+    runtimeSpin.fail('Brag runtime setup failed');
+    throw error;
+  }
   const inheritedPath = launch.env.Path || launch.env.PATH || '';
   launch.env.PATH = `${runtime.pathPrefix}${delimiter}${inheritedPath}`;
   if (process.platform === 'win32') launch.env.Path = launch.env.PATH;
@@ -208,15 +217,35 @@ export async function runBragInProject(root: string): Promise<void> {
   const isBatch = process.platform === 'win32' && /\.(cmd|bat)$/i.test(path);
   const executable = isBatch ? (process.env.ComSpec || 'cmd.exe') : path;
   const args = isBatch ? ['/d', '/s', '/c', path, ...launch.args] : launch.args;
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(executable, args, {
-      cwd: root,
-      env: launch.env,
-      stdio: launch.input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
-      windowsHide: true,
+  const generateSpin = spinner(`Generating launch video with ${launch.agent}...`).start();
+  const started = Date.now();
+  const timer = setInterval(() => {
+    generateSpin.text = `Generating launch video with ${launch.agent}... ${Math.floor((Date.now() - started) / 1000)}s elapsed`;
+  }, 1_000);
+  timer.unref();
+  let output = '';
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(executable, args, {
+        cwd: root,
+        env: launch.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      child.once('error', reject);
+      child.stdout.on('data', chunk => { output = `${output}${chunk}`.slice(-64 * 1024); });
+      child.stderr.on('data', chunk => { output = `${output}${chunk}`.slice(-64 * 1024); });
+      child.once('exit', code => code === 0 ? resolve() : reject(new Error(
+        `${launch.agent} exited with code ${code}${output.trim() ? `: ${output.trim().slice(-1_000)}` : ''}`
+      )));
+      child.stdin?.end(launch.input);
     });
-    child.once('error', reject);
-    child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${launch.agent} exited with code ${code}`)));
-    if (launch.input !== undefined) child.stdin?.end(launch.input);
-  });
+    generateSpin.succeed(`Brag video generated in ${Math.max(1, Math.round((Date.now() - started) / 1000))}s`);
+    if (output.trim()) logger.verbose(output.trim());
+  } catch (error) {
+    generateSpin.fail('Brag video generation failed');
+    throw error;
+  } finally {
+    clearInterval(timer);
+  }
 }
