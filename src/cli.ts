@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { setLogLevel } from './utils/logger.js';
+import { logger, setLogLevel } from './utils/logger.js';
 import { runMainPipeline } from './pipeline/main-pipeline.js';
 import { cmdInit } from './commands/init.js';
 import { cmdDocs } from './commands/docs.js';
@@ -72,6 +72,8 @@ program
   });
 
 program.hook('preAction', async (_command, action) => {
+  setupLogLevel(program.opts());
+  logger.brand(pkg.version);
   if (action.name() === 'setup') return;
   if (program.opts().yes) return;
   if (shouldRunFirstSetup(!!process.stdin.isTTY && !!process.stdout.isTTY)) {

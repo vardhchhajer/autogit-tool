@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import ora, { type Ora } from 'ora';
+import { pathToFileURL } from 'url';
 
 export type LogLevel = 'verbose' | 'normal' | 'quiet';
 
@@ -14,6 +15,20 @@ export function getLogLevel(): LogLevel {
 }
 
 export const logger = {
+  brand(version?: string): void {
+    if (currentLevel === 'quiet') return;
+    const logo = [
+      '   ___         __       _______ __',
+      '  / _ | __ __ / /____  / ___(_) /_',
+      ' / __ |/ // // __/ _ \\/ (_ / / __/',
+      '/_/ |_|\\_,_/ \\__/\\___/\\___/_/\\__/',
+    ];
+    console.log();
+    console.log(chalk.cyan.bold(logo.join('\n')));
+    console.log(chalk.gray(`  Ship the project, not the busywork${version ? `  v${version}` : ''}`));
+    console.log();
+  },
+
   info(msg: string): void {
     if (currentLevel === 'quiet') return;
     console.log(chalk.blue('ℹ') + ' ' + msg);
@@ -62,6 +77,15 @@ export const logger = {
   highlight(msg: string): void {
     if (currentLevel === 'quiet') return;
     console.log(chalk.bold.cyan(msg));
+  },
+
+  path(label: string, path: string): void {
+    if (currentLevel === 'quiet') return;
+    const display = chalk.cyan.underline(path);
+    const linked = process.stdout.isTTY
+      ? `\u001B]8;;${pathToFileURL(path).href}\u0007${display}\u001B]8;;\u0007`
+      : path;
+    console.log(`${chalk.blue('ℹ')} ${label}: ${linked}`);
   },
 
   box(title: string, content: string): void {

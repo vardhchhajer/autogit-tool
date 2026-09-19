@@ -5,6 +5,8 @@ import { resolveProjectDirectory } from '../utils/project-root.js';
 export async function cmdBrag(): Promise<void> {
   logger.header('Brag Video');
   logger.dimmed('The coding agent may create a brag-output folder in this project. Review its files before publishing.');
-  await runBragInProject(resolveProjectDirectory().root);
+  const result = await runBragInProject(resolveProjectDirectory().root);
   logger.success('Brag video workflow finished.');
+  logger.path('Video', result.videoPath);
+  logger.path('Open folder', result.outputDirectory);
 }

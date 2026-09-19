@@ -1,12 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { shouldRunFirstSetup } from '../dist/commands/setup.js';
-import { agentPackageName, bragSkillInstallCommand, buildBragLaunch, selectBragAgent } from '../dist/services/brag-agent.js';
+import { agentPackageName, bragSkillInstallCommand, buildBragLaunch, findBragResult, selectBragAgent } from '../dist/services/brag-agent.js';
 import { isOAuthAgentProvider, listProviders } from '../dist/ai/provider.js';
 import { buildAgentPromptLaunch } from '../dist/services/coding-agent.js';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 test('noninteractive runs never start the setup wizard', () => {
   assert.equal(shouldRunFirstSetup(false), false);
+});
+
+test('Brag reports the newly rendered video directory', t => {
+  const root = mkdtempSync(join(tmpdir(), 'autogit-brag-result-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directory = join(root, 'brag-output');
+  mkdirSync(directory);
+  const videoPath = join(directory, 'brag.mp4');
+  writeFileSync(videoPath, 'video');
+  assert.deepEqual(findBragResult(root), { outputDirectory: directory, videoPath });
 });
 
 test('Brag agent follows the selected provider', () => {

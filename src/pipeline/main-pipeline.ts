@@ -36,7 +36,6 @@ export async function runMainPipeline(options: PipelineOptions): Promise<void> {
   const projectDirectory = resolveProjectDirectory();
   const rootDir = projectDirectory.root;
 
-  logger.header('AutoGit');
   if (projectDirectory.discovered) logger.info(`Using project folder: ${rootDir}`);
   logger.dimmed(`Analyzing: ${rootDir}`);
   logger.blank();
@@ -377,7 +376,9 @@ async function handleSocialContent(
         createVideo = answer.createVideo;
       }
       if (createVideo) {
-        await runBragInProject(rootDir);
+        const result = await runBragInProject(rootDir);
+        logger.path('Video', result.videoPath);
+        logger.path('Open folder', result.outputDirectory);
       }
     }
   }

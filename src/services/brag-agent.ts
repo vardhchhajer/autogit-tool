@@ -5,7 +5,7 @@ import { listProviders } from '../ai/provider.js';
 import { ensureBragRuntime } from './brag-runtime.js';
 import { delimiter, join } from 'path';
 import { homedir } from 'os';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { buildAgentPromptLaunch } from './coding-agent.js';
 import { logger, spinner } from '../utils/logger.js';
 
@@ -191,7 +191,19 @@ export function buildBragLaunch(provider: AIProviderName, prompt: string, prefer
   return { agent, executable: 'opencode', args: ['run', '--model', `${providerId}/${model}`, prompt], env };
 }
 
-export async function runBragInProject(root: string): Promise<void> {
+export interface BragResult { outputDirectory: string; videoPath: string }
+
+export function findBragResult(root: string, createdAfter = 0): BragResult {
+  const videos = readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && /^brag-output(?:-|$)/.test(entry.name))
+    .map(entry => ({ outputDirectory: join(root, entry.name), videoPath: join(root, entry.name, 'brag.mp4') }))
+    .filter(result => existsSync(result.videoPath) && statSync(result.videoPath).mtimeMs >= createdAfter)
+    .sort((a, b) => statSync(b.videoPath).mtimeMs - statSync(a.videoPath).mtimeMs);
+  if (!videos[0]) throw new Error('Brag finished without creating a new brag.mp4 video');
+  return videos[0];
+}
+
+export async function runBragInProject(root: string): Promise<BragResult> {
   const config = loadConfig();
   const provider = config.ai?.provider || getAIConfig().provider;
   const agent = config.setup?.agent || selectBragAgent(provider);
@@ -240,8 +252,10 @@ export async function runBragInProject(root: string): Promise<void> {
       )));
       child.stdin?.end(launch.input);
     });
+    const result = findBragResult(root, started - 2_000);
     generateSpin.succeed(`Brag video generated in ${Math.max(1, Math.round((Date.now() - started) / 1000))}s`);
     if (output.trim()) logger.verbose(output.trim());
+    return result;
   } catch (error) {
     generateSpin.fail('Brag video generation failed');
     throw error;
