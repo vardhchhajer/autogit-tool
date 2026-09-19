@@ -67,13 +67,13 @@ export async function generateLatexProjectEntry(
 
     // Strip any markdown fencing
     entry = entry.replace(/^```(?:latex|tex)?\n?/i, '').replace(/\n?```$/i, '').trim();
+    if (!entry) throw new Error('AI returned an empty resume entry');
 
     spin.succeed('Resume entry generated from source code analysis');
     return entry;
   } catch (error: any) {
     spin.fail('AI generation failed');
-    logger.warn(`Falling back to template: ${error.message}`);
-    return generateTemplateEntry(analysis);
+    throw new Error(`Resume AI generation failed: ${error.message}`);
   }
 }
 

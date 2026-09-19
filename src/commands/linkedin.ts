@@ -101,13 +101,9 @@ export async function cmdLinkedin(opts: { ai?: boolean; screenshotUrl?: string; 
     }
   }
   if (promoImage) {
-    try {
-      const path = defaultSocialImagePath(analysis, 'artwork');
-      await generatePromotionalArtwork(analysis, path, typeof promoImage === 'string' ? promoImage : undefined);
-      logger.success(`Promotional artwork saved: ${path}`);
-    } catch (error: any) {
-      logger.warn(`Promotional artwork unavailable: ${error.message}`);
-    }
+    const path = defaultSocialImagePath(analysis, 'artwork');
+    await generatePromotionalArtwork(analysis, path, typeof promoImage === 'string' ? promoImage : undefined);
+    logger.success(`Promotional artwork saved: ${path}`);
   }
   if (showcaseCards) {
     const base = collectShowcaseFacts(rootDir, scan, analysis);

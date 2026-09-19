@@ -58,13 +58,7 @@ export async function generateReadme(
       spin.succeed('README generated from project inspection');
     } catch (error: any) {
       spin.fail('AI generation failed');
-      if (existingContent !== null) {
-        logger.warn(`Existing README left unchanged: ${error.message}`);
-        newContent = existingContent;
-      } else {
-        logger.warn(`Falling back to template: ${error.message}`);
-        newContent = generateTemplateReadme(analysis);
-      }
+      throw new Error(`README AI generation failed: ${error.message}`);
     }
   } else {
     newContent = generateTemplateReadme(analysis);

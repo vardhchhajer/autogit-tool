@@ -352,21 +352,21 @@ Shows what would be changed without touching any file, making any commit, or cal
 
 ---
 
-## Use Without AI
+## Explicit Non-AI Mode
 
-Every feature has a template fallback. Run with `--no-ai` to skip all API calls:
+Run with `--no-ai` to explicitly request offline template generation and skip all AI calls:
 
 ```bash
 autogit --no-ai
 ```
 
-README, docs, commit messages, resume entries, and social posts are all generated from templates based on the project analysis. Quality is lower but it works offline with no API keys.
+README, docs, commit messages, resume entries, and social posts are then generated from templates based on project analysis. Without `--no-ai`, an unavailable provider, failed request, or invalid AI response stops the command with a non-zero exit code. AutoGit never silently substitutes template content during an AI-enabled run.
 
 ### Project-aware README generation
 
 With an AI provider configured, `autogit readme` inspects the current project in several steps. It can search the project file list and read relevant source and configuration files before drafting. AutoGit shows the proposed README or a diff and asks before writing. No separate coding-agent program is required; the feature uses AutoGit's existing AI provider configuration.
 
-Sensitive files such as `.env`, private keys, and lockfiles are excluded from this inspection. If AI generation fails or no provider is configured while a README already exists, AutoGit leaves that file unchanged. For a new project, it falls back to a template. Use `autogit readme --no-ai` to request template generation explicitly.
+Sensitive files such as `.env`, private keys, and lockfiles are excluded from this inspection. If AI generation fails or no provider is configured, the command exits with an error and does not write a README. Use `autogit readme --no-ai` only when you intentionally want template generation.
 
 ---
 

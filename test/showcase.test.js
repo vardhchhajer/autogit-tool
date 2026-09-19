@@ -57,3 +57,20 @@ test('showcase --no-ai uses the factual template from the CLI', () => {
     assert.match(result.stdout, /Command: offline/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('AI-enabled showcase exits with an error instead of using a template', () => {
+  const root = mkdtempSync(join(tmpdir(), 'autogit-showcase-ai-failure-'));
+  try {
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'strict-ai-cli', bin: { strict: './cli.js' } }));
+    writeFileSync(join(root, 'cli.js'), 'console.log("ready")');
+    const result = spawnSync(process.execPath, [join(process.cwd(), 'dist', 'cli.js'), 'showcase'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, USERPROFILE: root, AUTOGIT_AI_PROVIDER: 'unavailable-test-provider' },
+      timeout: 30000,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Showcase AI generation failed: Unknown provider/);
+    assert.doesNotMatch(result.stdout, /Introducing Strict Ai Cli/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

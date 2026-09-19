@@ -46,26 +46,33 @@ export async function generateInsights(
       }
 
       const data = JSON.parse(content.trim());
+      const scores = [data.documentation_score, data.code_quality_score, data.maintainability_score];
+      const lists = [data.suggestions, data.performance_recommendations, data.security_observations,
+        data.missing_tests, data.missing_documentation, data.todo_summary];
+      if (scores.some(score => typeof score?.score !== 'number' || typeof score?.reason !== 'string') ||
+          lists.some(value => !Array.isArray(value))) {
+        throw new Error('AI returned an incomplete insights response');
+      }
       spin.succeed('Project insights generated');
 
       return {
-        documentationScore: data.documentation_score || { score: 5, reason: 'Unable to assess' },
-        codeQualityScore: data.code_quality_score || { score: 5, reason: 'Unable to assess' },
-        maintainabilityScore: data.maintainability_score || { score: 5, reason: 'Unable to assess' },
-        suggestions: data.suggestions || [],
-        performanceRecommendations: data.performance_recommendations || [],
-        securityObservations: data.security_observations || [],
-        missingTests: data.missing_tests || [],
-        missingDocumentation: data.missing_documentation || [],
-        todoSummary: data.todo_summary || [],
+        documentationScore: data.documentation_score,
+        codeQualityScore: data.code_quality_score,
+        maintainabilityScore: data.maintainability_score,
+        suggestions: data.suggestions,
+        performanceRecommendations: data.performance_recommendations,
+        securityObservations: data.security_observations,
+        missingTests: data.missing_tests,
+        missingDocumentation: data.missing_documentation,
+        todoSummary: data.todo_summary,
       };
     } catch (error: any) {
       spin.fail('AI insights generation failed');
-      logger.warn(`Using static analysis: ${error.message}`);
+      throw new Error(`Project insights AI generation failed: ${error.message}`);
     }
   }
 
-  // Static analysis fallback
+  // Static analysis is used only when explicitly requested with --no-ai.
   return generateStaticInsights(analysis, scan);
 }
 

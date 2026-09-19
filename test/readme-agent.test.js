@@ -83,7 +83,7 @@ test('agent can search the project file list before requesting source', async t 
   assert.match(seen[1], /src\/app.js/);
 });
 
-test('existing README stays unchanged when no usable AI provider is configured', async t => {
+test('README generation fails when no usable AI provider is configured', async t => {
   const root = fixture(t);
   const scan = scanProject(root);
   const analysis = await analyzeProject(root, scan);
@@ -93,12 +93,13 @@ test('existing README stays unchanged when no usable AI provider is configured',
     if (previous === undefined) delete process.env.AUTOGIT_AI_PROVIDER;
     else process.env.AUTOGIT_AI_PROVIDER = previous;
   });
-  const result = await generateReadme(root, analysis, true, scan);
-  assert.equal(result.content, '# Sample Tool\n\n[Custom guide](https://example.com/guide)\n');
-  assert.equal(result.diff, null);
+  await assert.rejects(
+    generateReadme(root, analysis, true, scan),
+    /README AI generation failed: Unknown provider/,
+  );
 });
 
-test('README manager rejects a draft that drops an existing link', async t => {
+test('README manager fails when a draft drops an existing link', async t => {
   const root = fixture(t);
   const scan = scanProject(root);
   const analysis = await analyzeProject(root, scan);
@@ -111,9 +112,10 @@ test('README manager rejects a draft that drops an existing link', async t => {
     isConfigured: () => true,
     generate: async () => ({ content: replies.shift(), provider: 'mock', model: 'mock' }),
   };
-  const result = await generateReadme(root, analysis, true, scan, provider);
-  assert.equal(result.diff, null);
-  assert.match(result.content, /Custom guide/);
+  await assert.rejects(
+    generateReadme(root, analysis, true, scan, provider),
+    /README AI generation failed: Generated README omitted 1 existing link/,
+  );
 });
 
 test('README manager returns a diff for a valid inspected draft', async t => {

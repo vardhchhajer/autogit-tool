@@ -61,7 +61,7 @@ export function writeDocs(docs: DocFile[]): void {
   }
 }
 
-async function generateWithAI(docType: string, prompt: string): Promise<string | null> {
+async function generateWithAI(docType: string, prompt: string): Promise<string> {
   const spin = spinner(`Generating ${docType} with AI...`).start();
   try {
     const provider = getProvider();
@@ -80,11 +80,13 @@ async function generateWithAI(docType: string, prompt: string): Promise<string |
       content = content.slice(3).replace(/\n?```$/, '');
     }
 
+    content = content.trim();
+    if (!content) throw new Error('AI returned an empty response');
     spin.succeed(`${docType} generated`);
-    return content.trim();
+    return content;
   } catch (error: any) {
     spin.fail(`Failed to generate ${docType}: ${error.message}`);
-    return null;
+    throw new Error(`${docType} AI generation failed: ${error.message}`);
   }
 }
 

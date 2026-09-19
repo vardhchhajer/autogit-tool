@@ -320,11 +320,9 @@ async function handleSocialContent(
       } catch (error: any) { logger.warn(`Screenshot unavailable: ${error.message}`); }
     }
     if (promoImage) {
-      try {
-        const path = join(shareDirectory, 'artwork.png');
-        await generatePromotionalArtwork(analysis, path);
-        logger.success(`Artwork saved: ${path}`);
-      } catch (error: any) { logger.warn(`Artwork unavailable: ${error.message}`); }
+      const path = join(shareDirectory, 'artwork.png');
+      await generatePromotionalArtwork(analysis, path);
+      logger.success(`Artwork saved: ${path}`);
     }
   }
 
@@ -377,8 +375,7 @@ async function handleSocialContent(
         createVideo = answer.createVideo;
       }
       if (createVideo) {
-        try { await runBragInProject(rootDir); }
-        catch (error: any) { logger.warn(`Brag video was not completed: ${error.message}`); }
+        await runBragInProject(rootDir);
       }
     }
   }

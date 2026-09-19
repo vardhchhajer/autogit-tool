@@ -47,8 +47,8 @@ export function collectShowcaseFacts(root: string, scan: ScanResult, analysis: P
 
 export async function generateShowcase(base: Pick<Showcase, 'kind' | 'name' | 'facts'>, useAI: boolean): Promise<Showcase> {
   const facts = base.facts.map(f => `- ${f.text} [${f.source}]`).join('\n');
-  const fallback = `Introducing ${base.name}.\n\n${base.facts.map(f => f.text).join('\n')}\n\nExplore the project: [PROJECT_LINK]`;
-  if (!useAI) return { ...base, post: fallback };
+  const template = `Introducing ${base.name}.\n\n${base.facts.map(f => f.text).join('\n')}\n\nExplore the project: [PROJECT_LINK]`;
+  if (!useAI) return { ...base, post: template };
   try {
     const provider = getProvider();
     const response = await provider.generate([
@@ -56,9 +56,11 @@ export async function generateShowcase(base: Pick<Showcase, 'kind' | 'name' | 'f
       { role: 'user', content: `Project: ${base.name}\nType: ${base.kind}\nVerified facts:\n${facts}` },
     ], { temperature: 0.3, maxTokens: 600 });
     const post = response.content.trim();
-    if (!post || !post.includes('[PROJECT_LINK]')) return { ...base, post: fallback };
+    if (!post || !post.includes('[PROJECT_LINK]')) {
+      throw new Error('AI showcase response was empty or omitted [PROJECT_LINK]');
+    }
     return { ...base, post };
-  } catch {
-    return { ...base, post: fallback };
+  } catch (error: any) {
+    throw new Error(`Showcase AI generation failed: ${error.message}`);
   }
 }

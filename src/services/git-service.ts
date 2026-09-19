@@ -204,27 +204,24 @@ export async function generateCommitMessage(rootDir: string, useAI: boolean): Pr
     return 'docs: update project documentation';
   }
 
-  try {
-    const provider = getProvider();
-    const prompt = commitMessagePrompt(diff);
+  const provider = getProvider();
+  const prompt = commitMessagePrompt(diff);
 
-    const messages: AIMessage[] = [
-      { role: 'system', content: 'You generate concise, conventional git commit messages.' },
-      { role: 'user', content: prompt },
-    ];
+  const messages: AIMessage[] = [
+    { role: 'system', content: 'You generate concise, conventional git commit messages.' },
+    { role: 'user', content: prompt },
+  ];
 
-    const response = await provider.generate(messages, { temperature: 0.3, maxTokens: 100 });
-    let msg = response.content.trim();
+  const response = await provider.generate(messages, { temperature: 0.3, maxTokens: 100 });
+  let msg = response.content.trim();
 
-    // Clean up any quotes or backticks
-    msg = msg.replace(/^["'`]+|["'`]+$/g, '');
-    // Take only first line
-    msg = msg.split('\n')[0].trim();
+  // Clean up any quotes or backticks
+  msg = msg.replace(/^["'`]+|["'`]+$/g, '');
+  // Take only first line
+  msg = msg.split('\n')[0].trim();
 
-    return msg || 'docs: update project documentation';
-  } catch {
-    return 'docs: update project documentation';
-  }
+  if (!msg) throw new Error('Commit-message AI generation returned an empty response');
+  return msg;
 }
 
 export async function commit(rootDir: string, message: string): Promise<boolean> {

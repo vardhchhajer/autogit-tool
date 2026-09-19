@@ -51,8 +51,7 @@ export async function generateSocialContent(
     };
   } catch (error: any) {
     spin.fail('Social content generation failed');
-    logger.warn(`Falling back to templates: ${error.message}`);
-    return generateTemplateSocialContent(analysis);
+    throw new Error(`Social content AI generation failed: ${error.message}`);
   }
 }
 
@@ -116,7 +115,9 @@ async function generateSingle(provider: any, prompt: string): Promise<string> {
   ];
 
   const response = await provider.generate(messages, { temperature: 0.8, maxTokens: 2000 });
-  return response.content.trim();
+  const content = response.content.trim();
+  if (!content) throw new Error('AI returned empty social content');
+  return content;
 }
 
 function devtoPrompt(analysis: ProjectAnalysis): string {
